@@ -24,4 +24,15 @@ describe("package safety", () => {
     expect(manifest.dsh?.client?.platform).toBe("web")
     expect(manifest.exports).toHaveProperty("./client")
   })
+
+  it("ships the doctor and authenticated verification scripts", async () => {
+    const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
+      files?: string[]
+      scripts?: Record<string, string>
+    }
+
+    expect(manifest.files).toContain("scripts")
+    expect(manifest.scripts?.doctor).toContain("scripts/doctor.mjs")
+    expect(manifest.scripts?.["verify:connector"]).toContain("scripts/verify-connector.mjs")
+  })
 })

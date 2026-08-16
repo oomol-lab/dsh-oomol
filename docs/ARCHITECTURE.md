@@ -15,6 +15,8 @@ The plugin is deliberately thin. It resolves an OOMOL MCP client credential, con
 
 The Host plugin remains active while the credential is absent. Its browser half writes the key through the loopback-fenced Harness Credentials API; `credentials/updated` then causes the Host half to dispose the old MCP client and mount a new one. The browser receives credential metadata only and never receives the value.
 
+Connection testing uses a short-lived MCP initialization plus first-page `tools/list` probe. A loopback-only `/oomol` RPC channel returns the sanitized phase, server identity, and discovery-tool count. Raw remote errors and request headers never cross into the browser.
+
 ## Responsibilities
 
 ### DeepSeek Harness
@@ -32,7 +34,8 @@ The Host plugin remains active while the credential is absent. Its browser half 
 - MCP client lifecycle composition
 - Web settings card for write-only key configuration
 - Credential-change-driven MCP client reload
-- Future pairing, richer connection status, and approval presentation
+- Credential-safe connection health and explicit test-connection flow
+- Future pairing and approval presentation
 
 ### OOMOL Connector
 

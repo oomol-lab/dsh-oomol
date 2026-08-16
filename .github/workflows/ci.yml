@@ -25,3 +25,18 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - name: Pack and install the published artifact shape
+        shell: bash
+        run: |
+          artifact_dir="$(mktemp -d)"
+          profile_dir="$(mktemp -d)"
+          pnpm pack --pack-destination "$artifact_dir" >/dev/null
+          artifact_path="$(find "$artifact_dir" -maxdepth 1 -name '*.tgz' -print -quit)"
+          DSH_HOME="$profile_dir" pnpm exec dsh plugin --profile web add -w "$artifact_path"
+          DSH_HOME="$profile_dir" pnpm exec dsh --profile web --dump-config > "$profile_dir/dump.yml"
+          grep -q 'name: dsh-oomol' "$profile_dir/dump.yml"
+          grep -q 'apiKeyEnv: OOMOL_MCP_API_KEY' "$profile_dir/dump.yml"
+          if grep -Eq 'Authorization:|api_[A-Za-z0-9_-]{8,}' "$profile_dir/dump.yml"; then
+            echo "credential-like value found in bundle dump" >&2
+            exit 1
+          fi

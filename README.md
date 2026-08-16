@@ -20,6 +20,7 @@ The initial version provides:
 - non-fatal startup while the key is unconfigured;
 - live MCP client reload after a stored key is added, rotated, or removed;
 - an OOMOL card under Settings > Plugins for write-only key configuration;
+- live MCP initialization/discovery health checks with credential-safe status reporting;
 - tests that keep secrets out of the bundle configuration.
 
 Copy-free browser pairing and action-aware policy remain planned; see [Architecture](./docs/ARCHITECTURE.md) and [Roadmap](./docs/ROADMAP.md).
@@ -41,6 +42,13 @@ Run the environment doctor without printing any credential values:
 
 ```bash
 pnpm run doctor
+```
+
+With a real OOMOL MCP client key in the launching environment, verify hosted
+MCP initialization and the progressive-discovery surface:
+
+```bash
+OOMOL_MCP_API_KEY=... pnpm verify:connector
 ```
 
 ## Install from this checkout

@@ -19,6 +19,7 @@ Gmail、Slack、Notion、GitHub 等 Provider 的 OAuth Token 和 API Key 继续�
 - 复用 DSH 官方 MCP Client 的工具发现、注册、超时和重连；
 - 无 Key 时正常启动，配置或轮换 Key 后自动重建 MCP Client；
 - Settings > Plugins 下的 OOMOL Key 配置卡片；
+- MCP 初始化与渐进式发现检测，以及不会泄露远端错误文本的连接状态；
 - Key 通过 Harness Credentials Service 只写保存，浏览器永远不会回读明文；
 - 确保 Secret 不进入 Bundle 配置的测试。
 
@@ -35,6 +36,12 @@ pnpm check
 
 ```bash
 pnpm run doctor
+```
+
+使用真实 OOMOL MCP Client Key 验证托管 MCP 初始化和渐进式发现：
+
+```bash
+OOMOL_MCP_API_KEY=... pnpm verify:connector
 ```
 
 ## 从本地目录安装

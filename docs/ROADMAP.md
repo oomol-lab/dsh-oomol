@@ -12,8 +12,8 @@
 
 ## Phase 1 — installable MVP
 
-- [ ] Verify authenticated Streamable HTTP initialization against the hosted endpoint
-- [ ] Verify progressive tool discovery and structured results
+- [ ] Verify authenticated Streamable HTTP initialization against the hosted endpoint (`pnpm verify:connector` is ready; a real key run is pending)
+- [ ] Verify progressive tool discovery and structured results (first-page discovery is covered by the verifier; Action execution is pending)
 - [ ] Test personal, team, and multiple-connection identities
 - [ ] Test 401, 429, 5xx, timeout, reconnect exhaustion, and schema changes
 - [ ] Validate action-level approval UX
@@ -24,10 +24,10 @@
 
 - [x] Add `dsh.client` browser bundle
 - [x] Add an OOMOL Connector card under Settings > Plugins
-- [ ] Show connecting, connected, unauthorized, and expired states (configured/unconfigured is complete)
+- [x] Show connecting, connected, unauthorized/rate-limited, and unavailable states without exposing remote error text
 - [ ] Add personal/team selection
 - [x] Add Manage connections, Add Provider, and View logs links
-- [ ] Add an explicit test-connection flow (key rotation already reloads the MCP client)
+- [x] Add an explicit test-connection flow (key rotation also reloads the MCP client)
 - [x] Never return credential values to the browser after storage
 
 ## Phase 3 — OOMOL Console onboarding

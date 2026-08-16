@@ -20,6 +20,7 @@
   "files": [
     "lib",
     "docs",
+    "scripts",
     "cordis.patch.yml",
     "README.md",
     "README.zh-CN.md",
@@ -50,6 +51,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "doctor": "node scripts/doctor.mjs",
+    "verify:connector": "pnpm build && node scripts/verify-connector.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm build",
     "prepack": "pnpm check"
   },
@@ -145,5 +147,8 @@
     "tsdown": "^0.22.2",
     "typescript": "^5.9.2",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0"
   }
 }

@@ -15,11 +15,21 @@ type LocaleKey =
   | "configured"
   | "unconfigured"
   | "source"
+  | "connectionStatus"
+  | "connecting"
+  | "connected"
+  | "unauthorized"
+  | "rateLimited"
+  | "unavailable"
+  | "lastChecked"
+  | "toolCount"
   | "writeOnlyHint"
   | "save"
   | "saving"
   | "remove"
   | "refresh"
+  | "testConnection"
+  | "testing"
   | "readOnly"
   | "saved"
   | "removed"
@@ -43,6 +53,17 @@ interface CredentialState {
   source?: string
 }
 
+type ConnectionPhase = "unconfigured" | "connecting" | "connected" | "unauthorized" | "rate-limited" | "unavailable"
+
+interface ConnectorStatus {
+  phase: ConnectionPhase
+  checkedAt?: string
+  errorCode?: string
+  serverName?: string
+  serverVersion?: string
+  toolCount?: number
+}
+
 const en: Record<LocaleKey, string> = {
   title: "OOMOL Connector",
   description: "Connect DeepSeek Harness to OOMOL apps and Actions.",
@@ -50,11 +71,21 @@ const en: Record<LocaleKey, string> = {
   configured: "Configured",
   unconfigured: "Not configured",
   source: "Source: {source}",
+  connectionStatus: "Connection: {status}",
+  connecting: "Connecting",
+  connected: "Connected",
+  unauthorized: "Unauthorized",
+  rateLimited: "Rate limited",
+  unavailable: "Unavailable",
+  lastChecked: "Last checked: {time}",
+  toolCount: "Discovery tools: {count}",
   writeOnlyHint: "The key is write-only. It is stored by Harness Credentials and is never returned to this page.",
   save: "Save key",
   saving: "Saving…",
   remove: "Remove key",
   refresh: "Refresh status",
+  testConnection: "Test connection",
+  testing: "Testing…",
   readOnly: "This key comes from a read-only source such as the launch environment. Change it at that source.",
   saved: "Key saved. The Connector client is reloading.",
   removed: "Key removed. OOMOL tools will be unloaded.",
@@ -72,11 +103,21 @@ const zh: Record<LocaleKey, string> = {
   configured: "已配置",
   unconfigured: "未配置",
   source: "来源：{source}",
+  connectionStatus: "连接状态：{status}",
+  connecting: "连接中",
+  connected: "已连接",
+  unauthorized: "未授权或 Key 无效",
+  rateLimited: "请求受限",
+  unavailable: "暂时不可用",
+  lastChecked: "上次检测：{time}",
+  toolCount: "发现工具数：{count}",
   writeOnlyHint: "Key 只能写入，由 Harness Credentials 保存，页面永远不会读取或回显明文。",
   save: "保存 Key",
   saving: "保存中…",
   remove: "删除 Key",
   refresh: "刷新状态",
+  testConnection: "测试连接",
+  testing: "检测中…",
   readOnly: "当前 Key 来自启动环境等只读来源，请在对应来源中修改。",
   saved: "Key 已保存，Connector 客户端正在重新加载。",
   removed: "Key 已删除，OOMOL 工具将被卸载。",
@@ -95,24 +136,49 @@ export function apply(ctx: ClientContext): void {
 
   function OomolSettingsCard({ t }: CardProps) {
     const [credential, setCredential] = useState<CredentialState>({ configured: false, writable: true })
+    const [connector, setConnector] = useState<ConnectorStatus>({ phase: "unconfigured" })
     const [draft, setDraft] = useState("")
     const [busy, setBusy] = useState(false)
+    const [testing, setTesting] = useState(false)
     const [message, setMessage] = useState<"saved" | "removed" | "failed" | undefined>()
 
     const refresh = useCallback(async () => {
       try {
-        const response = await api.credentials.describe({ refs: [API_KEY_REF] })
-        if (!response.result.ok) return
-        const view = response.result.value.credentials[API_KEY_REF]
+        const [credentialResponse, connectorResponse] = await Promise.all([
+          api.credentials.describe({ refs: [API_KEY_REF] }),
+          (ctx.get("connection") as ConnectionHandle).rpc.call("/oomol", "status", {}),
+        ])
+        if (!credentialResponse.result.ok) throw new Error(credentialResponse.result.error.message)
+        const view = credentialResponse.result.value.credentials[API_KEY_REF]
         setCredential({
           configured: view?.configured ?? false,
           writable: view?.writable ?? true,
           ...(view?.source ? { source: view.source } : {}),
         })
+        if (connectorResponse.ok && isConnectorStatus(connectorResponse.value)) {
+          setConnector(connectorResponse.value)
+        }
       } catch {
         setMessage("failed")
       }
     }, [])
+
+    const testConnection = async (force = false) => {
+      if (testing || (!force && (busy || !credential.configured))) return
+      setTesting(true)
+      setMessage(undefined)
+      setConnector((current) => ({ ...current, phase: "connecting" }))
+      try {
+        const response = await (ctx.get("connection") as ConnectionHandle).rpc.call("/oomol", "test", {})
+        if (!response.ok || !isConnectorStatus(response.value)) throw new Error("Invalid Connector status")
+        setConnector(response.value)
+      } catch {
+        setConnector({ phase: "unavailable", errorCode: "unavailable" })
+        setMessage("failed")
+      } finally {
+        setTesting(false)
+      }
+    }
 
     useEffect(() => {
       void refresh()
@@ -124,10 +190,12 @@ export function apply(ctx: ClientContext): void {
       setBusy(true)
       setMessage(undefined)
       try {
-        await api.credentials.set({ ref: API_KEY_REF, value })
+        const response = await api.credentials.set({ ref: API_KEY_REF, value })
+        if (!response.result.ok) throw new Error(response.result.error.message)
         setDraft("")
         setMessage("saved")
         await refresh()
+        await testConnection(true)
       } catch {
         setMessage("failed")
       } finally {
@@ -140,7 +208,8 @@ export function apply(ctx: ClientContext): void {
       setBusy(true)
       setMessage(undefined)
       try {
-        await api.credentials.unset({ ref: API_KEY_REF })
+        const response = await api.credentials.unset({ ref: API_KEY_REF })
+        if (!response.result.ok) throw new Error(response.result.error.message)
         setDraft("")
         setMessage("removed")
         await refresh()
@@ -180,6 +249,11 @@ export function apply(ctx: ClientContext): void {
         <p style={styles.hint}>{t("writeOnlyHint")}</p>
         {!credential.writable ? <p style={styles.warning}>{t("readOnly")}</p> : null}
         {credential.source ? <p style={styles.hint}>{t("source", { source: credential.source })}</p> : null}
+        <p style={connector.phase === "connected" ? styles.success : connector.phase === "unauthorized" || connector.phase === "unavailable" ? styles.error : styles.hint}>
+          {t("connectionStatus", { status: t(localeKeyForPhase(connector.phase)) })}
+        </p>
+        {connector.toolCount !== undefined ? <p style={styles.hint}>{t("toolCount", { count: connector.toolCount })}</p> : null}
+        {connector.checkedAt ? <p style={styles.hint}>{t("lastChecked", { time: new Date(connector.checkedAt).toLocaleString() })}</p> : null}
         {message ? <p role="status" style={message === "failed" ? styles.error : styles.success}>{t(message)}</p> : null}
 
         <div style={styles.actions}>
@@ -191,6 +265,9 @@ export function apply(ctx: ClientContext): void {
           </button>
           <button type="button" disabled={busy} style={styles.secondary} onClick={() => { void refresh() }}>
             {t("refresh")}
+          </button>
+          <button type="button" disabled={busy || testing || !credential.configured} style={styles.secondary} onClick={() => { void testConnection() }}>
+            {t(testing ? "testing" : "testConnection")}
           </button>
         </div>
 
@@ -210,6 +287,17 @@ export function apply(ctx: ClientContext): void {
     order: 30,
     locale: NS,
   }, OomolSettingsCard))
+}
+
+function isConnectorStatus(value: unknown): value is ConnectorStatus {
+  if (typeof value !== "object" || value === null || !("phase" in value)) return false
+  return ["unconfigured", "connecting", "connected", "unauthorized", "rate-limited", "unavailable"].includes(String(value.phase))
+}
+
+function localeKeyForPhase(phase: ConnectionPhase): LocaleKey {
+  if (phase === "unconfigured") return "unconfigured"
+  if (phase === "rate-limited") return "rateLimited"
+  return phase
 }
 
 const styles = {
