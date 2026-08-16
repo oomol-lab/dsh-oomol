@@ -1,87 +1,180 @@
-# dsh-oomol
+# OOMOL Connector for DeepSeek Harness
 
-OOMOL Connector for DeepSeek Harness. Connect apps and call Actions from one DSH plugin.
+Use apps and services connected through OOMOL directly from DeepSeek Harness.
 
-The implementation mounts DeepSeek Harness's official Streamable HTTP MCP client and connects it to OOMOL's progressive-disclosure Connector MCP endpoint. Workflow authoring and execution are outside the current release scope.
+`dsh-oomol` gives DeepSeek Harness progressive access to OOMOL Connector: discover the connectors available to an account, inspect an Action only when it is needed, and execute it without copying Provider credentials into Harness.
 
-Provider OAuth tokens and API keys remain in OOMOL Connector. DeepSeek Harness receives only the dedicated OOMOL MCP client key.
+> [!IMPORTANT]
+> This project is a developer preview tested with DeepSeek Harness `0.1.0-rc.6`. DeepSeek Harness is evolving quickly, so test compatibility before upgrading either package.
 
-## Status
+## What you can do
 
-This repository contains a Host + Web plugin tested through an isolated profile install and Web boot against DeepSeek Harness `0.1.0-rc.6`. DeepSeek Harness is in developer preview, so compatibility with later releases must be verified before publishing.
+With this plugin, DeepSeek Harness can:
 
-The initial version provides:
+- discover apps connected to your personal or team OOMOL identity;
+- search the Actions exposed by a Connector;
+- load an Action schema only when it is needed;
+- execute Connector Actions through OOMOL's hosted MCP endpoint;
+- reload the OOMOL connection after its key is added, rotated, or removed; and
+- test MCP initialization and discovery from **Settings > Plugins**.
 
-- a standard `dsh.bundle` package;
-- runtime credential resolution through the Harness credentials service or launch environment;
-- the hosted OOMOL MCP endpoint;
-- optional OOMOL team selection;
-- the official DSH MCP client's discovery, tool registration, timeout, and reconnect behavior;
-- non-fatal startup while the key is unconfigured;
-- live MCP client reload after a stored key is added, rotated, or removed;
-- an OOMOL card under Settings > Plugins for write-only key configuration;
-- live MCP initialization/discovery health checks with credential-safe status reporting;
-- tests that keep secrets out of the bundle configuration.
+The plugin deliberately keeps a small discovery surface instead of registering every Connector Action as a permanent Harness tool.
 
-Copy-free browser pairing and action-aware policy remain planned; see [Architecture](./docs/ARCHITECTURE.md) and [Roadmap](./docs/ROADMAP.md).
+## Install with one prompt
 
-## Prerequisites
+> [!NOTE]
+> The public npm package has not been released yet. The prompt below is the intended public installation path after `dsh-oomol` is published. Contributors can use [Install from a checkout](#install-from-a-checkout) today.
 
-- Node.js 22.19+ or 24+
+Paste this prompt into a DeepSeek Harness session that has terminal access:
+
+```text
+Install the latest stable OOMOL Connector plugin (`dsh-oomol`) into my
+DeepSeek Harness `web` profile using the official `dsh plugin` CLI.
+
+Before installing, verify that Node.js 22.19 or later and the `dsh` CLI are
+available. Do not use sudo. Do not ask for, read, print, or store any API keys,
+and do not modify unrelated Harness profiles or configuration.
+
+After installation, verify that the package was added successfully. If the
+current Harness process must be restarted, do not terminate this session;
+give me the exact restart command instead. Then guide me to Settings > Plugins
+> OOMOL Connector to configure my OOMOL MCP API key. If installation fails,
+stop and show me the exact error instead of trying unrelated workarounds.
+```
+
+The installation requires a Harness restart before the plugin becomes active.
+
+## Manual installation
+
+### Requirements
+
+- Node.js `22.19` or later, or Node.js `24+`
 - DeepSeek Harness
-- An OOMOL MCP API key from the OOMOL Console
+- an OOMOL account
+- a dedicated OOMOL MCP API key
 
-## Development
-
-```bash
-pnpm install
-pnpm check
-```
-
-Run the environment doctor without printing any credential values:
+Install the plugin into the Web profile:
 
 ```bash
-pnpm run doctor
+dsh plugin --profile web add -w dsh-oomol
 ```
 
-With a real OOMOL MCP client key in the launching environment, verify hosted
-MCP initialization and the progressive-discovery surface:
+Start or restart DeepSeek Harness:
 
 ```bash
-OOMOL_MCP_API_KEY=... pnpm verify:connector
+dsh web
 ```
 
-## Install from this checkout
+Open the URL printed in the terminal, then continue with [Connect your OOMOL account](#connect-your-oomol-account).
 
-Build the package, then add it to the Web profile:
+## Connect your OOMOL account
+
+Create a dedicated key on the [OOMOL API keys page](https://console.oomol.com/api-key). This is an **OOMOL MCP client key**. It is not:
+
+- your DeepSeek model API key;
+- an OAuth token or API key for Gmail, Notion, Slack, GitHub, or another Provider; or
+- an internal `oo` CLI authentication file.
+
+Provider OAuth tokens and API keys remain in OOMOL Connector. DeepSeek Harness stores only the dedicated, revocable OOMOL MCP key.
+
+Do not paste the key into a chat message. Configure it through the write-only settings field:
+
+1. Open **Settings** in DeepSeek Harness.
+2. Select **Plugins**.
+3. Find **OOMOL Connector** under plugin configuration.
+4. Paste the dedicated OOMOL MCP key and select **Save key**.
+5. Select **Test connection**.
+6. Confirm that the connection state changes to **Connected**.
+
+The browser receives only whether the key is configured, its source, and whether it is writable. It never receives the stored value.
+
+Manage connected apps in the [OOMOL Console](https://console.oomol.com/connections).
+
+### Team connections
+
+The current settings card uses your personal OOMOL identity by default. To use a team-scoped identity, set the team name before starting Harness:
 
 ```bash
-pnpm build
-dsh plugin --profile web add -w /absolute/path/to/dsh-oomol
+export OOMOL_TEAM_NAME="your-team"
+dsh web
 ```
 
-After Harness starts, save the dedicated OOMOL MCP key under **Settings > Plugins > Plugin configuration > OOMOL Connector**. The browser receives only configured/source/writable metadata and never receives the stored value.
+Leave `OOMOL_TEAM_NAME` unset for a personal identity. Team selection in the settings UI is planned.
 
-You can alternatively provide the key before starting Harness:
+### Environment-only key configuration
+
+For headless or managed environments, provide the key to the launching process:
 
 ```bash
 export OOMOL_MCP_API_KEY="api_..."
 dsh web
 ```
 
-To run as a team, also set:
+A key supplied by the launch environment is read-only in the settings card and must be changed at its source.
 
-```bash
-export OOMOL_TEAM_NAME="your-team"
+## Try it
+
+After the connection test succeeds, start with read-only discovery prompts:
+
+```text
+Show me the OOMOL connectors available to this account.
 ```
 
-For personal identity, leave `OOMOL_TEAM_NAME` unset.
+```text
+Find the available Actions for my Notion connector. Do not execute anything.
+```
 
-`oo` CLI is reserved for login, diagnostics, onboarding, and independent verification. Normal Action execution uses MCP directly and never reads OOCLI's internal authentication files.
+```text
+Check whether one of my connected apps can create a calendar event. Inspect
+the Action schema first and do not execute it yet.
+```
 
-## Configuration
+For an Action with side effects, ask Harness to show the proposed arguments and wait for confirmation:
 
-The installed bundle inserts one `oomol` row. A later profile layer may replace its configuration:
+```text
+Prepare an Action that adds a row to my connected spreadsheet. Show me the
+target account, Action name, and proposed values, then ask for confirmation
+before executing it.
+```
+
+## How it works
+
+```mermaid
+flowchart LR
+    U["User in DeepSeek Harness"] --> P["dsh-oomol"]
+    K["Harness credential storage"] -->|"OOMOL MCP key"| P
+    P -->|"Discover and execute"| M["OOMOL Connector MCP"]
+    M --> A["Connected apps"]
+    C["Provider credentials in OOMOL"] --> A
+```
+
+The Host plugin resolves the OOMOL MCP key through the Harness credentials service first and the launch environment second. It then composes DeepSeek Harness's official Streamable HTTP MCP client with OOMOL's hosted endpoint.
+
+Connector capabilities are disclosed progressively: Harness searches for a relevant Action, reads the selected guide and schema, and then executes the exact Action. Normal execution uses MCP directly and does not launch OOCLI or read OOCLI's internal authentication files.
+
+For implementation details, see [Architecture](./docs/ARCHITECTURE.md).
+
+## Project status
+
+| Capability | Status |
+| --- | --- |
+| Hosted OOMOL MCP connection | Available |
+| Progressive Connector and Action discovery | Available |
+| Connector Action execution | Available |
+| Write-only key configuration in Settings | Available |
+| Live connection status and connection test | Available |
+| Personal OOMOL identity | Available |
+| Team identity through the launch environment | Available |
+| Team selection in Settings | Planned |
+| Browser-based account pairing | Planned |
+| Action-aware approval presentation | Planned |
+| Workflow authoring and execution | Not included |
+
+The packaged artifact is covered by Node.js 22 and 24 CI, unit tests, a clean-profile install, and a Web boot smoke test. Authenticated Action execution against a real OOMOL account remains a release validation item. See the [Roadmap](./docs/ROADMAP.md) for the full checklist.
+
+## Configuration reference
+
+The installed bundle adds one `oomol` row. A later profile layer may replace its non-secret configuration:
 
 ```yaml
 - id: oomol
@@ -95,7 +188,82 @@ The installed bundle inserts one `oomol` row. A later profile layer may replace 
     failOnStartupError: false
 ```
 
-The API key itself does not belong in `cordis.patch.yml`. The plugin resolves it at runtime so `dsh --dump-config` cannot reveal a secret from the bundle layer.
+Do not place the API key itself in `cordis.patch.yml`. Runtime credential resolution keeps the secret out of the bundle layer and normal `dsh --dump-config` output.
+
+## Troubleshooting
+
+| Symptom | Likely cause | What to do |
+| --- | --- | --- |
+| npm reports that `dsh-oomol` cannot be found | The public package has not been released, or npm is using a different registry | Use a checkout for development, or verify the configured npm registry after release |
+| The plugin does not appear in Settings | It was installed into another profile, or Harness has not restarted | Install into the `web` profile and restart `dsh web` |
+| The key is shown as not configured | No key was saved for this profile | Save it in **Settings > Plugins > OOMOL Connector** |
+| Connection state is **Unauthorized** | The OOMOL MCP key is invalid, expired, or revoked | Create a dedicated replacement key and save it again |
+| Connection succeeds but the expected app is missing | The Provider is not connected, or the selected team identity is wrong | Check [OOMOL connections](https://console.oomol.com/connections) and `OOMOL_TEAM_NAME` |
+| A launch-environment key cannot be changed in Settings | Environment credentials are read-only in the browser | Change `OOMOL_MCP_API_KEY` where Harness is launched and restart it |
+| A newer Harness release fails to boot | A Developer Preview API changed | Return to the tested compatibility version and open an issue with the failing versions |
+
+The local environment doctor reports readiness without printing credential values:
+
+```bash
+pnpm run doctor
+```
+
+## Security
+
+### For users
+
+- Never paste an OOMOL MCP key into chat or commit it to Git.
+- Use a separate, revocable OOMOL key for each Harness installation.
+- Review externally visible, destructive, permission-changing, or broad-sharing Actions before approving execution.
+- Do not automatically retry a side-effecting Action when its outcome is unknown.
+- Removing this plugin does not remove or disconnect Provider accounts in OOMOL.
+
+### For developers
+
+- Keep Provider credentials in OOMOL Connector; never persist them in this repository or a Cordis patch.
+- Resolve the OOMOL MCP key through Harness credentials first, then the launch environment.
+- Do not read OOCLI internal authentication files.
+- The MCP `execute_action` contract does not carry the HTTP Action API's idempotency key.
+
+Report vulnerabilities according to [SECURITY.md](./SECURITY.md). Do not open a public issue containing credentials, Provider data, or exploit details.
+
+## Development
+
+Install dependencies and run the required checks:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm check
+```
+
+### Install from a checkout
+
+Build the plugin and install its absolute path into the Web profile:
+
+```bash
+pnpm build
+dsh plugin --profile web add -w "$(pwd)"
+```
+
+Start Harness:
+
+```bash
+dsh web
+```
+
+Run the environment doctor without printing credentials:
+
+```bash
+pnpm run doctor
+```
+
+With a real OOMOL MCP key, verify hosted MCP initialization and the progressive discovery surface:
+
+```bash
+OOMOL_MCP_API_KEY="..." pnpm verify:connector
+```
+
+The verifier suppresses remote error text and never prints the credential value.
 
 ## Uninstall
 
@@ -105,15 +273,6 @@ dsh plugin --profile web remove dsh-oomol
 
 Uninstalling the plugin does not remove or disconnect Provider accounts in OOMOL.
 
-## Security
-
-- Never commit an OOMOL API key or Provider credential.
-- Use a dedicated, revocable MCP key for DeepSeek Harness.
-- Provider credentials remain in OOMOL Connector.
-- Review externally visible, destructive, or broad-sharing actions before execution.
-- The production release must validate action-level approval UX before enabling broad write access.
-- MCP `execute_action` does not carry the HTTP Action API's idempotency key; do not automatically retry side-effecting calls whose outcome is unknown.
-
 ## License
 
-MIT
+[MIT](./LICENSE)
