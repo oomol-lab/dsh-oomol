@@ -4,6 +4,8 @@ Use apps and services connected through OOMOL directly from DeepSeek Harness.
 
 `dsh-oomol` gives DeepSeek Harness progressive access to OOMOL Connector: discover the connectors available to an account, inspect an Action only when it is needed, and execute it without copying Provider credentials into Harness.
 
+[View the package on npm](https://www.npmjs.com/package/dsh-oomol)
+
 > [!IMPORTANT]
 > This project is a developer preview tested with DeepSeek Harness `0.1.0-rc.6`. DeepSeek Harness is evolving quickly, so test compatibility before upgrading either package.
 
@@ -21,9 +23,6 @@ With this plugin, DeepSeek Harness can:
 The plugin deliberately keeps a small discovery surface instead of registering every Connector Action as a permanent Harness tool.
 
 ## Install with one prompt
-
-> [!NOTE]
-> The public npm package has not been released yet. The prompt below is the intended public installation path after `dsh-oomol` is published. Contributors can use [Install from a checkout](#install-from-a-checkout) today.
 
 Paste this prompt into a DeepSeek Harness session that has terminal access:
 
@@ -158,6 +157,7 @@ For implementation details, see [Architecture](./docs/ARCHITECTURE.md).
 
 | Capability | Status |
 | --- | --- |
+| Public npm package | Available |
 | Hosted OOMOL MCP connection | Available |
 | Progressive Connector and Action discovery | Available |
 | Connector Action execution | Available |
@@ -194,7 +194,7 @@ Do not place the API key itself in `cordis.patch.yml`. Runtime credential resolu
 
 | Symptom | Likely cause | What to do |
 | --- | --- | --- |
-| npm reports that `dsh-oomol` cannot be found | The public package has not been released, or npm is using a different registry | Use a checkout for development, or verify the configured npm registry after release |
+| npm reports that `dsh-oomol` cannot be found | npm is using a different registry, or its metadata cache is stale | Verify that `npm config get registry` returns `https://registry.npmjs.org/`, then retry |
 | The plugin does not appear in Settings | It was installed into another profile, or Harness has not restarted | Install into the `web` profile and restart `dsh web` |
 | The key is shown as not configured | No key was saved for this profile | Save it in **Settings > Plugins > OOMOL Connector** |
 | Connection state is **Unauthorized** | The OOMOL MCP key is invalid, expired, or revoked | Create a dedicated replacement key and save it again |
