@@ -23,7 +23,7 @@ Gmail、Slack、Notion、GitHub 等 Provider 的 OAuth Token 和 API Key 继续�
 - Key 通过 Harness Credentials Service 只写保存，浏览器永远不会回读明文；
 - 确保 Secret 不进入 Bundle 配置的测试。
 
-浏览器无密钥复制配对和 Action 级策略仍在后续路线图中，详见 [架构](./docs/ARCHITECTURE.md) 和 [路线图](./docs/ROADMAP.md)。
+浏览器无密钥复制配对和 Action 级策略仍在后续路线图中，详见 [架构](./ARCHITECTURE.md) 和 [路线图](./ROADMAP.md)。
 
 ## 开发
 

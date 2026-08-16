@@ -1,6 +1,6 @@
 {
   "name": "dsh-oomol",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OOMOL Connector integration for DeepSeek Harness: connect apps and call Actions through progressive MCP discovery.",
   "type": "module",
   "main": "./lib/index.js",
@@ -23,7 +23,6 @@
     "scripts",
     "cordis.patch.yml",
     "README.md",
-    "README.zh-CN.md",
     "SECURITY.md",
     "LICENSE"
   ],

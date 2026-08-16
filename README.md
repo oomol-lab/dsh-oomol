@@ -4,7 +4,7 @@ Use apps and services connected through OOMOL directly from DeepSeek Harness.
 
 `dsh-oomol` gives DeepSeek Harness progressive access to OOMOL Connector: discover the connectors available to an account, inspect an Action only when it is needed, and execute it without copying Provider credentials into Harness.
 
-[View the package on npm](https://www.npmjs.com/package/dsh-oomol)
+[npm package](https://www.npmjs.com/package/dsh-oomol) · [中文文档](./docs/README.zh-CN.md)
 
 > [!IMPORTANT]
 > This project is a developer preview tested with DeepSeek Harness `0.1.0-rc.6`. DeepSeek Harness is evolving quickly, so test compatibility before upgrading either package.
