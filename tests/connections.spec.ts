@@ -43,6 +43,7 @@ describe("OOMOL Connections RPC", () => {
           id: "app_123",
           service: "github",
           displayName: "GitHub",
+          providerAccountId: "github:octocat",
           accountLabel: "octocat",
           authType: "oauth2",
           status: "active",
@@ -71,6 +72,7 @@ describe("OOMOL Connections RPC", () => {
           id: "app_123",
           service: "github",
           displayName: "GitHub",
+          providerAccountId: "github:octocat",
           accountLabel: "octocat",
           authType: "oauth2",
           status: "active",
@@ -140,6 +142,39 @@ describe("OOMOL Connections RPC", () => {
     expect(JSON.stringify(response)).not.toContain("not-returned")
   })
 
+  it("reconnects one existing app through its appId-scoped route", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(init?.method).toBe("POST")
+      expect(JSON.parse(String(init?.body))).toEqual({ apiKey: "replacement-key" })
+      return json({
+        success: true,
+        data: {
+          id: "app_456",
+          service: "example",
+          displayName: "Example",
+          authType: "api_key",
+          status: "active",
+          isDefault: true,
+        },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    const handler = createConnectionsRpcHandler({ resolveConnection: async () => connection })
+
+    const response = await handler("connections/connect", {
+      service: "example",
+      appId: "app_456",
+      authType: "api_key",
+      apiKey: "replacement-key",
+    }, signal)
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://connector.oomol.com/v1/apps/by-id/app_456/connect/api-key",
+    )
+    expect(response).toMatchObject({ ok: true, value: { app: { id: "app_456", isDefault: true } } })
+    expect(JSON.stringify(response)).not.toContain("replacement-key")
+  })
+
   it("uses a fixed Console callback for OAuth and validates identifiers before fetching", async () => {
     const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       expect(JSON.parse(String(init?.body))).toEqual({
@@ -164,6 +199,50 @@ describe("OOMOL Connections RPC", () => {
     const invalid = await handler("connections/provider", { service: "../../api-keys" }, signal)
     expect(invalid.ok).toBe(false)
     expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it("sets one sanitized app as the service default", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(init?.method).toBe("PUT")
+      expect(JSON.parse(String(init?.body))).toEqual({ appId: "app_456" })
+      return json({
+        success: true,
+        data: {
+          id: "app_456",
+          service: "github",
+          displayName: "GitHub",
+          accountLabel: "work@example.com",
+          isDefault: true,
+          authType: "oauth2",
+          status: "active",
+          credential: { accessToken: "must-not-cross-rpc" },
+        },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    const handler = createConnectionsRpcHandler({ resolveConnection: async () => connection })
+
+    const response = await handler("connections/set-default", {
+      service: "github",
+      appId: "app_456",
+    }, signal)
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://connector.oomol.com/v1/apps/services/github/default",
+    )
+    expect(response).toEqual({
+      ok: true,
+      value: {
+        id: "app_456",
+        service: "github",
+        displayName: "GitHub",
+        accountLabel: "work@example.com",
+        isDefault: true,
+        authType: "oauth2",
+        status: "active",
+      },
+    })
+    expect(JSON.stringify(response)).not.toContain("must-not-cross-rpc")
   })
 
   it("returns an unconfigured state without making a network request", async () => {

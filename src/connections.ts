@@ -65,6 +65,23 @@ export function createConnectionsRpcHandler(context: ConnectionsRpcContext) {
         return { ok: true as const, value: { disconnected: true } }
       }
 
+      if (endpoint === "connections/set-default") {
+        const service = readIdentifier(payload, "service")
+        const appId = readIdentifier(payload, "appId")
+        const response = await requestConnector(
+          connection,
+          `/v1/apps/services/${encodeURIComponent(service)}/default`,
+          {
+            method: "PUT",
+            body: { appId },
+            signal,
+          },
+        )
+        const app = sanitizeApp(dataOf(response))
+        if (!app) throw new ConnectionsRequestError("invalid_response", "OOMOL returned an invalid App.")
+        return { ok: true as const, value: app }
+      }
+
       return rpcError("not_found", "Unknown OOMOL Connections operation.")
     } catch (error) {
       if (error instanceof ConnectionsRequestError) return rpcError(error.code, error.message)
@@ -122,7 +139,7 @@ function connectBody(input: ConnectInput): unknown {
 async function requestConnector(
   connection: ResolvedOomolConnection,
   path: string,
-  options: { method?: "GET" | "POST" | "DELETE"; body?: unknown; signal: AbortSignal },
+  options: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown; signal: AbortSignal },
 ): Promise<unknown> {
   const url = new URL(path, new URL(connection.endpoint).origin)
   const headers = new Headers(connection.headers)
@@ -286,6 +303,7 @@ function sanitizeApp(value: unknown) {
     id,
     service,
     displayName: optionalPlainString(source.displayName, 200) ?? service,
+    providerAccountId: optionalPlainString(source.providerAccountId, 300),
     accountLabel: optionalPlainString(source.accountLabel, 300),
     alias: optionalPlainString(source.alias, 200),
     authType: authTypeOrUndefined(source.authType) ?? null,

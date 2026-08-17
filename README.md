@@ -23,6 +23,12 @@ With this plugin, DeepSeek Harness can:
 
 The plugin deliberately keeps a small discovery surface instead of registering every Connector Action as a permanent Harness tool.
 
+## Video tutorial
+
+[![Install and use OOMOL Connector in DeepSeek Harness](./docs/images/oomol-connector-video-tutorial.png)](https://youtu.be/lVrYJsW4kmo)
+
+The [YouTube walkthrough](https://youtu.be/lVrYJsW4kmo) demonstrates the complete setup flow: install the plugin, get an OOMOL MCP API key, configure it in DeepSeek Harness, open Connections, and use connected apps from a conversation.
+
 ## Quick start
 
 ### Requirements

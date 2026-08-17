@@ -232,12 +232,12 @@ export function apply(ctx: ClientContext): void {
       try {
         const response = await api.credentials.set({ ref: API_KEY_REF, value })
         if (!response.result.ok) throw new Error(response.result.error.message)
-        connections.clearCache()
         setDraft("")
         setEditingKey(false)
         setMessage("saved")
         await refresh()
         await testConnection(true)
+        connections.invalidateAccountData()
       } catch {
         setMessage("failed")
       } finally {
@@ -252,11 +252,11 @@ export function apply(ctx: ClientContext): void {
       try {
         const response = await api.credentials.unset({ ref: API_KEY_REF })
         if (!response.result.ok) throw new Error(response.result.error.message)
-        connections.clearCache()
         setDraft("")
         setEditingKey(false)
         setMessage("removed")
         await refresh()
+        connections.invalidateAccountData()
       } catch {
         setMessage("failed")
       } finally {

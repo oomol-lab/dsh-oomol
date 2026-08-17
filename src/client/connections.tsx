@@ -8,11 +8,18 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type FormEvent,
   type ReactNode,
 } from "react"
 import { TimedMemoryCache } from "./connections-cache.js"
+import { ConnectionsListRequests } from "./connections-controller.js"
+import {
+  deriveProviderConnectionState,
+  hasAmbiguousDefault,
+  pickDefaultOrSingleAccount,
+} from "./connections-accounts.js"
 
 export const CONNECTIONS_NS = "oomol.connections"
 
@@ -37,6 +44,21 @@ type ConnectionsLocaleKey =
   | "disconnecting"
   | "addAnother"
   | "account"
+  | "connectedAccount"
+  | "authentication"
+  | "selectConnection"
+  | "currentConnection"
+  | "defaultConnection"
+  | "setDefault"
+  | "settingDefault"
+  | "chooseDefault"
+  | "reconnect"
+  | "reconnecting"
+  | "status"
+  | "active"
+  | "reauthRequired"
+  | "failed"
+  | "updated"
   | "apiKey"
   | "customCredential"
   | "oauth"
@@ -50,6 +72,7 @@ type ConnectionsLocaleKey =
   | "oauthBlocked"
   | "oauthFailed"
   | "connectedSuccess"
+  | "defaultUpdated"
   | "disconnectedSuccess"
   | "configureFirst"
   | "tryAgain"
@@ -95,6 +118,21 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   disconnecting: "Disconnecting…",
   addAnother: "Add another connection",
   account: "Connected accounts",
+  connectedAccount: "Connected account",
+  authentication: "Authentication",
+  selectConnection: "Select connection",
+  currentConnection: "Current",
+  defaultConnection: "Default",
+  setDefault: "Set default",
+  settingDefault: "Setting default…",
+  chooseDefault: "Choose default",
+  reconnect: "Reconnect",
+  reconnecting: "Reconnecting…",
+  status: "Status",
+  active: "Active",
+  reauthRequired: "Reauth required",
+  failed: "Failed",
+  updated: "Updated",
   apiKey: "API key",
   customCredential: "Credentials",
   oauth: "OAuth",
@@ -108,6 +146,7 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   oauthBlocked: "The authorization window was blocked. Allow popups and try again.",
   oauthFailed: "Authorization was not detected. You can refresh to check again.",
   connectedSuccess: "Connection saved.",
+  defaultUpdated: "Default connection updated.",
   disconnectedSuccess: "Connection removed.",
   configureFirst: "Configure and test an OOMOL MCP key in Settings first.",
   tryAgain: "Try again",
@@ -148,6 +187,21 @@ export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   disconnecting: "正在断开…",
   addAnother: "添加另一个连接",
   account: "已连接账号",
+  connectedAccount: "连接账号",
+  authentication: "认证方式",
+  selectConnection: "选择连接",
+  currentConnection: "当前",
+  defaultConnection: "默认",
+  setDefault: "设为默认",
+  settingDefault: "正在设为默认…",
+  chooseDefault: "请选择默认账号",
+  reconnect: "重新连接",
+  reconnecting: "正在重新连接…",
+  status: "状态",
+  active: "正常",
+  reauthRequired: "需要重新授权",
+  failed: "异常",
+  updated: "更新时间",
   apiKey: "API Key",
   customCredential: "凭据",
   oauth: "OAuth",
@@ -161,6 +215,7 @@ export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   oauthBlocked: "授权窗口被浏览器拦截，请允许弹窗后重试。",
   oauthFailed: "暂未检测到授权结果，可以刷新后再次确认。",
   connectedSuccess: "连接已保存。",
+  defaultUpdated: "默认连接已更新。",
   disconnectedSuccess: "连接已断开。",
   configureFirst: "请先在设置中配置并测试 OOMOL MCP Key。",
   tryAgain: "重试",
@@ -227,6 +282,7 @@ interface ConnectedApp {
   id: string
   service: string
   displayName: string
+  providerAccountId?: string
   accountLabel?: string
   alias?: string
   authType: AuthType | null
@@ -266,6 +322,11 @@ export class ConnectionsController {
   #listCache = new TimedMemoryCache<"list", ConnectionsList>(CONNECTIONS_CACHE_FRESH_MS)
   #providerCache = new TimedMemoryCache<string, ProviderDetail>(CONNECTIONS_CACHE_FRESH_MS)
   #repositoryCache = new TimedMemoryCache<"open-connector", RepositoryStatus>(REPOSITORY_CACHE_FRESH_MS)
+  #listRequests = new ConnectionsListRequests()
+
+  subscribeList = this.#listRequests.subscribe
+  getListRequest = this.#listRequests.getSnapshot
+  requestList = this.#listRequests.request
 
   getListCache = () => this.#listCache.get("list")
 
@@ -291,9 +352,10 @@ export class ConnectionsController {
 
   isRepositoryCacheFresh = () => this.#repositoryCache.isFresh("open-connector")
 
-  clearCache = () => {
+  invalidateAccountData = () => {
     this.#listCache.clear()
     this.#providerCache.clear()
+    this.#listRequests.invalidate()
   }
 }
 
@@ -311,7 +373,10 @@ export function createConnectionsComponents(
         type="button"
         aria-label={t("title")}
         style={styles.headerButton}
-        onClick={() => { layout.openDetails() }}
+        onClick={() => {
+          controller.requestList()
+          layout.openDetails()
+        }}
       >
         <OomolMark size={17} />
         <span>{t("open")}</span>
@@ -354,6 +419,7 @@ function ConnectionsPanel({
   const [loading, setLoading] = useState(() => initialListCache === undefined)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const listRequest = useSyncExternalStore(controller.subscribeList, controller.getListRequest)
   const alive = useRef(true)
   const hasListData = useRef(initialListCache !== undefined)
 
@@ -387,12 +453,26 @@ function ConnectionsPanel({
   }, [call, controller])
 
   useEffect(() => {
+    if (!listRequest.activated) return
     const cached = controller.getListCache()
-    if (cached && controller.isListCacheFresh()) return
+    if (cached && controller.isListCacheFresh()) {
+      hasListData.current = true
+      setData(cached.value)
+      setError(null)
+      setLoading(false)
+      return
+    }
+    if (!cached) {
+      hasListData.current = false
+      setData(null)
+      setSelectedService(null)
+      setProvider(null)
+    }
     void refresh(cached !== undefined).catch(() => undefined)
-  }, [controller, refresh])
+  }, [controller, listRequest, refresh])
 
   useEffect(() => {
+    if (!listRequest.activated) return
     if (controller.isRepositoryCacheFresh()) return
     void call<RepositoryStatus>("repository/open-connector", {})
       .then((next) => {
@@ -400,7 +480,7 @@ function ConnectionsPanel({
         if (alive.current) setRepository(next)
       })
       .catch(() => undefined)
-  }, [call, controller])
+  }, [call, controller, listRequest])
 
   useEffect(() => {
     if (!selectedService) {
@@ -501,7 +581,19 @@ function ConnectionsPanel({
             <div style={styles.providerList}>
               {visibleProviders.map((item) => {
                 const apps = appsByService.get(item.service) ?? []
-                const needsAttention = apps.some((app) => app.status !== "active")
+                const connectionState = deriveProviderConnectionState(apps)
+                const statusLabel = connectionState === "ambiguous"
+                  ? t("chooseDefault")
+                  : connectionState === "needs_attention"
+                    ? t("needsAttention")
+                    : connectionState === "connected"
+                      ? `${t("connected")} · ${apps.length}`
+                      : t("notConnected")
+                const statusStyle = connectionState === "ambiguous" || connectionState === "needs_attention"
+                  ? styles.statusWarning
+                  : connectionState === "connected"
+                    ? styles.statusConnected
+                    : styles.statusIdle
                 return (
                   <button key={item.service} type="button" style={styles.providerRow} onClick={() => {
                     setProvider(controller.getProviderCache(item.service)?.value ?? null)
@@ -512,9 +604,7 @@ function ConnectionsPanel({
                       <strong style={styles.providerName}>{item.displayName}</strong>
                       <span style={styles.providerMeta}>{authTypeLabels(item.authTypes, t)}</span>
                     </span>
-                    <span style={needsAttention ? styles.statusWarning : apps.length ? styles.statusConnected : styles.statusIdle}>
-                      {needsAttention ? t("needsAttention") : apps.length ? `${t("connected")} · ${apps.length}` : t("notConnected")}
-                    </span>
+                    <span style={statusStyle}>{statusLabel}</span>
                     <span style={styles.chevron}>›</span>
                   </button>
                 )
@@ -572,6 +662,26 @@ function ProviderView({
   const [error, setError] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
+  const [settingDefault, setSettingDefault] = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
+  const [selectedAppId, setSelectedAppId] = useState(() => pickDefaultOrSingleAccount(apps)?.id ?? "")
+  const manageableApps = useMemo(() => apps.filter((app) => app.status !== "disconnected"), [apps])
+  const sortedApps = useMemo(
+    () => [...manageableApps].sort((left, right) => Number(right.isDefault) - Number(left.isDefault)
+      || (right.updatedAt ?? 0) - (left.updatedAt ?? 0)
+      || left.id.localeCompare(right.id)),
+    [manageableApps],
+  )
+  const selectedApp = manageableApps.find((app) => app.id === selectedAppId) ?? null
+  const ambiguous = hasAmbiguousDefault(manageableApps)
+
+  useEffect(() => {
+    setSelectedAppId((current) => manageableApps.some((app) => app.id === current)
+      ? current
+      : pickDefaultOrSingleAccount(manageableApps)?.id ?? "")
+    setReconnecting(false)
+    setConfirming(null)
+  }, [manageableApps])
 
   const disconnect = async (app: ConnectedApp) => {
     setDisconnecting(app.id)
@@ -588,6 +698,31 @@ function ProviderView({
     }
   }
 
+  const setDefault = async (app: ConnectedApp) => {
+    setSettingDefault(true)
+    setError(null)
+    try {
+      await call<ConnectedApp>("connections/set-default", {
+        service: provider?.service ?? app.service,
+        appId: app.id,
+      })
+      setMessage(t("defaultUpdated"))
+      await onRefresh(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setSettingDefault(false)
+    }
+  }
+
+  const selectApp = (appId: string) => {
+    setSelectedAppId(appId)
+    setReconnecting(false)
+    setConfirming(null)
+    setMessage(null)
+    setError(null)
+  }
+
   return (
     <div style={styles.panelBody}>
       <button type="button" style={styles.backButton} onClick={onBack}>← {t("back")}</button>
@@ -601,39 +736,107 @@ function ProviderView({
             </div>
           </div>
 
-          {apps.length ? (
+          {manageableApps.length ? (
             <section style={styles.section}>
               <div style={styles.sectionTitle}>{t("account")}</div>
-              <div style={styles.accountList}>
-                {apps.map((app) => (
-                  <div key={app.id} style={styles.accountRow}>
-                    <span style={app.status === "active" ? styles.accountDot : styles.accountDotWarning} />
+              {manageableApps.length > 1 ? (
+                <select
+                  aria-label={t("selectConnection")}
+                  value={selectedAppId}
+                  style={styles.accountSelect}
+                  onChange={(event) => selectApp(event.target.value)}
+                >
+                  {ambiguous ? <option value="">{t("selectConnection")}</option> : null}
+                  {sortedApps.map((app) => (
+                    <option key={app.id} value={app.id}>
+                      {accountPrimaryLabel(app)}
+                      {app.isDefault ? ` · ${t("defaultConnection")}` : ""}
+                      {app.status !== "active" ? ` · ${connectionStatusLabel(app.status, t)}` : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              {ambiguous && !selectedApp ? <div style={styles.notice}>{t("chooseDefault")}</div> : null}
+              {selectedApp ? (
+                <div style={styles.selectedAccountCard}>
+                  <div style={styles.selectedAccountHeader}>
+                    <span style={selectedApp.status === "active" ? styles.accountDot : styles.accountDotWarning} />
                     <span style={styles.providerCopy}>
-                      <strong style={styles.accountName}>{app.alias || app.accountLabel || app.displayName}</strong>
-                      <span style={styles.providerMeta}>{app.authType ? authTypeLabel(app.authType, t) : provider.displayName}</span>
+                      <strong style={styles.accountName}>{accountPrimaryLabel(selectedApp)}</strong>
+                      {accountSecondaryLabel(selectedApp) ? (
+                        <span style={styles.providerMeta}>{accountSecondaryLabel(selectedApp)}</span>
+                      ) : null}
                     </span>
-                    {confirming === app.id ? (
-                      <span style={styles.accountActions}>
-                        <button type="button" style={styles.dangerButton} disabled={disconnecting === app.id} onClick={() => { void disconnect(app) }}>
-                          {disconnecting === app.id ? t("disconnecting") : t("confirmDisconnect")}
+                    <span style={styles.accountBadges}>
+                      <span style={styles.currentBadge}>{t("currentConnection")}</span>
+                      {selectedApp.isDefault ? <span style={styles.defaultBadge}>{t("defaultConnection")}</span> : null}
+                    </span>
+                  </div>
+                  <div style={styles.accountMetaGrid}>
+                    <span style={styles.accountMetaLabel}>{t("status")}</span>
+                    <span>{connectionStatusLabel(selectedApp.status, t)}</span>
+                    <span style={styles.accountMetaLabel}>{t("connectedAccount")}</span>
+                    <span style={styles.accountMetaValue}>{selectedApp.accountLabel || selectedApp.providerAccountId || "—"}</span>
+                    <span style={styles.accountMetaLabel}>{t("authentication")}</span>
+                    <span>{selectedApp.authType ? authTypeLabel(selectedApp.authType, t) : provider.displayName}</span>
+                    {selectedApp.updatedAt ? (
+                      <>
+                        <span style={styles.accountMetaLabel}>{t("updated")}</span>
+                        <span>{new Date(selectedApp.updatedAt).toLocaleString()}</span>
+                      </>
+                    ) : null}
+                  </div>
+                  <div style={styles.accountActions}>
+                    <button type="button" style={styles.compactSecondaryButton} disabled={disconnecting !== null || settingDefault} onClick={() => setReconnecting((current) => !current)}>
+                      {reconnecting ? t("cancel") : t("reconnect")}
+                    </button>
+                    {!selectedApp.isDefault ? (
+                      <button type="button" style={styles.compactSecondaryButton} disabled={settingDefault || disconnecting !== null} onClick={() => { void setDefault(selectedApp) }}>
+                        {settingDefault ? t("settingDefault") : t("setDefault")}
+                      </button>
+                    ) : null}
+                    {confirming === selectedApp.id ? (
+                      <>
+                        <button type="button" style={styles.dangerButton} disabled={disconnecting === selectedApp.id} onClick={() => { void disconnect(selectedApp) }}>
+                          {disconnecting === selectedApp.id ? t("disconnecting") : t("confirmDisconnect")}
                         </button>
-                        <button type="button" style={styles.compactSecondaryButton} disabled={disconnecting === app.id} onClick={() => setConfirming(null)}>
+                        <button type="button" style={styles.compactSecondaryButton} disabled={disconnecting === selectedApp.id} onClick={() => setConfirming(null)}>
                           {t("cancel")}
                         </button>
-                      </span>
+                      </>
                     ) : (
-                      <button type="button" style={styles.dangerButton} onClick={() => setConfirming(app.id)}>
+                      <button type="button" style={styles.dangerButton} disabled={settingDefault} onClick={() => setConfirming(selectedApp.id)}>
                         {t("disconnect")}
                       </button>
                     )}
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {reconnecting && selectedApp ? (
+            <section style={styles.section}>
+              <div style={styles.sectionTitle}>{t("reconnect")}</div>
+              <ConnectionForm
+                app={selectedApp}
+                apps={apps}
+                call={call}
+                provider={provider}
+                t={t}
+                onConnected={async () => {
+                  setReconnecting(false)
+                  setError(null)
+                  setMessage(t("connectedSuccess"))
+                  await onRefresh(true)
+                }}
+                onError={setError}
+              />
             </section>
           ) : null}
 
           <section style={styles.section}>
-            <div style={styles.sectionTitle}>{apps.length ? t("addAnother") : t("connect")}</div>
+            <div style={styles.sectionTitle}>{manageableApps.length ? t("addAnother") : t("connect")}</div>
             <ConnectionForm
               apps={apps}
               call={call}
@@ -656,6 +859,7 @@ function ProviderView({
 }
 
 function ConnectionForm({
+  app,
   apps,
   call,
   provider,
@@ -663,6 +867,7 @@ function ConnectionForm({
   onConnected,
   onError,
 }: {
+  app?: ConnectedApp
   apps: ConnectedApp[]
   call: <T>(endpoint: string, payload: unknown) => Promise<T>
   provider: ProviderDetail
@@ -670,7 +875,9 @@ function ConnectionForm({
   onConnected: () => Promise<void>
   onError: (message: string | null) => void
 }) {
-  const [authType, setAuthType] = useState<AuthType>(provider.authTypes[0] ?? "oauth2")
+  const [authType, setAuthType] = useState<AuthType>(() => app?.authType && provider.authTypes.includes(app.authType)
+    ? app.authType
+    : provider.authTypes[0] ?? "oauth2")
   const [apiKey, setApiKey] = useState("")
   const [values, setValues] = useState<Record<string, string>>({})
   const [comment, setComment] = useState("")
@@ -693,7 +900,7 @@ function ConnectionForm({
     setComment("")
     setOauthWaiting(false)
     onError(null)
-  }, [authType])
+  }, [app?.id, authType])
 
   const connect = async (event: FormEvent) => {
     event.preventDefault()
@@ -714,6 +921,7 @@ function ConnectionForm({
       const baseline = appFingerprint(apps)
       const result = await call<ConnectResult>("connections/connect", {
         service: provider.service,
+        ...(app ? { appId: app.id } : {}),
         authType,
         ...(authType === "api_key" ? { apiKey, extra: values } : {}),
         ...(authType === "custom_credential" ? { values } : {}),
@@ -807,7 +1015,7 @@ function ConnectionForm({
         style={styles.primaryButton}
         disabled={busy || unsupported || oauthUnavailable || missingRequired || (authType === "api_key" && !apiKey.trim())}
       >
-        {busy ? t("connecting") : t("connect")}
+        {busy ? t(app ? "reconnecting" : "connecting") : t(app ? "reconnect" : "connect")}
       </button>
     </form>
   )
@@ -897,6 +1105,22 @@ function authTypeLabel(type: AuthType, t: (key: ConnectionsLocaleKey) => string)
   if (type === "custom_credential") return t("customCredential")
   if (type === "federated") return t("federated")
   return t("noAuth")
+}
+
+function accountPrimaryLabel(app: ConnectedApp) {
+  return app.alias || app.accountLabel || app.providerAccountId || app.displayName || app.id
+}
+
+function accountSecondaryLabel(app: ConnectedApp) {
+  const primary = accountPrimaryLabel(app)
+  return [app.accountLabel, app.providerAccountId].find((value) => value && value !== primary)
+}
+
+function connectionStatusLabel(status: string, t: (key: ConnectionsLocaleKey) => string) {
+  if (status === "active") return t("active")
+  if (status === "reauth_required") return t("reauthRequired")
+  if (status === "error") return t("failed")
+  return t("notConnected")
 }
 
 function localeKeyForConnectionsReason(reason: string): ConnectionsLocaleKey {
@@ -1026,8 +1250,15 @@ const styles: Record<string, CSSProperties> = {
   providerHeroTitle: { fontSize: 20, lineHeight: "26px", margin: 0 },
   section: { border, borderRadius: 12, background: raised, padding: 14, marginBottom: 14 },
   sectionTitle: { fontSize: 12, fontWeight: 650, marginBottom: 12, color: muted, textTransform: "uppercase", letterSpacing: ".04em" },
-  accountList: { display: "grid", gap: 8 },
-  accountRow: { display: "flex", alignItems: "center", gap: 9, border, borderRadius: 9, padding: "9px 10px", background: surface },
+  accountSelect: { width: "100%", boxSizing: "border-box", border, borderRadius: 9, padding: "9px 10px", marginBottom: 10, background: surface, color: "inherit", outline: "none", font: "inherit", fontSize: 12 },
+  selectedAccountCard: { border, borderRadius: 9, padding: 10, background: surface, display: "grid", gap: 11 },
+  selectedAccountHeader: { display: "flex", alignItems: "center", gap: 9, minWidth: 0 },
+  accountBadges: { display: "inline-flex", flexShrink: 0, alignItems: "center", gap: 4 },
+  currentBadge: { color: muted, border, borderRadius: 999, padding: "2px 6px", fontSize: 9, whiteSpace: "nowrap" },
+  defaultBadge: { color: business, background: businessSurface, borderRadius: 999, padding: "2px 6px", fontSize: 9, whiteSpace: "nowrap" },
+  accountMetaGrid: { display: "grid", gridTemplateColumns: "minmax(86px, auto) minmax(0, 1fr)", gap: "6px 10px", paddingTop: 9, borderTop: border, fontSize: 11 },
+  accountMetaLabel: { color: muted },
+  accountMetaValue: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   accountDot: { width: 8, height: 8, borderRadius: 999, background: success, boxShadow: `0 0 0 3px ${successSurface}` },
   accountDotWarning: { width: 8, height: 8, borderRadius: 999, background: warning, boxShadow: `0 0 0 3px ${warningSurface}` },
   accountName: { fontSize: 12 },

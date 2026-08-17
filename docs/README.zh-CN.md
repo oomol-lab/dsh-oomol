@@ -8,6 +8,12 @@
 
 Gmail、Slack、Notion、GitHub 等 Provider 的 OAuth Token 和 API Key 继续保存在 OOMOL Connector 中；DeepSeek Harness 只持有一个专用、可撤销的 OOMOL MCP Client Key。
 
+## 视频教程
+
+[![在 DeepSeek Harness 中安装并使用 OOMOL Connector](./images/oomol-connector-video-tutorial.png)](https://youtu.be/lVrYJsW4kmo)
+
+这段 [YouTube 视频教程](https://youtu.be/lVrYJsW4kmo) 演示了完整流程：安装插件、获取 OOMOL MCP API Key、在 DeepSeek Harness 中完成配置、打开连接中心，以及在会话中使用已连接的应用。
+
 ## 快速开始
 
 ### 准备条件
