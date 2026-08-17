@@ -44,6 +44,7 @@ type ConnectionsLocaleKey =
   | "federated"
   | "comment"
   | "required"
+  | "permissions"
   | "oauthPopup"
   | "oauthWaiting"
   | "oauthBlocked"
@@ -101,6 +102,7 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   federated: "Federated identity",
   comment: "Connection note (optional)",
   required: "Required",
+  permissions: "Permissions",
   oauthPopup: "Continue in the authorization window.",
   oauthWaiting: "Waiting for authorization to finish…",
   oauthBlocked: "The authorization window was blocked. Allow popups and try again.",
@@ -153,6 +155,7 @@ export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   federated: "联合身份",
   comment: "连接备注（可选）",
   required: "必填",
+  permissions: "权限",
   oauthPopup: "请在弹出的授权窗口中继续。",
   oauthWaiting: "正在等待授权完成…",
   oauthBlocked: "授权窗口被浏览器拦截，请允许弹窗后重试。",
@@ -456,7 +459,6 @@ function ConnectionsPanel({
   return (
     <aside style={styles.panel} aria-label={t("title")}>
       <header style={styles.panelHeader}>
-        <div style={styles.brandMark}><OomolMark size={34} /></div>
         <div style={styles.headingCopy}>
           <strong style={styles.panelTitle}>{t("title")}</strong>
           <span style={styles.panelSubtitle} title={subtitle}>{subtitle}</span>
@@ -775,7 +777,7 @@ function ConnectionForm({
 
       {authType === "oauth2" && scopeOptions.length ? (
         <fieldset style={styles.scopeFieldset}>
-          <legend style={styles.fieldLabel}>Permissions</legend>
+          <legend style={styles.fieldLabel}>{t("permissions")}</legend>
           {scopeOptions.map((option) => (
             <label key={option.value} style={styles.scopeOption}>
               <input
@@ -951,7 +953,7 @@ function GitHubMark() {
 
 function RefreshIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
       <path d="M20 6v5h-5" />
       <path d="M19 11a7.5 7.5 0 1 0 .2 4" />
     </svg>
@@ -969,7 +971,7 @@ function SearchIcon() {
 
 function CloseIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ display: "block" }}>
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ display: "block" }}>
       <path d="m6 6 12 12M18 6 6 18" />
     </svg>
   )
@@ -992,12 +994,11 @@ const businessSurface = "var(--dsw-alias-state-business-tertiary, #e8efff)"
 const styles: Record<string, CSSProperties> = {
   headerButton: { border, minWidth: 104, height: 32, color: "var(--dsw-alias-label-primary, inherit)", cursor: "pointer", background: "transparent", borderRadius: 18, display: "inline-flex", justifyContent: "center", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 13, fontFamily: "inherit" },
   panel: { width: "100%", height: "100%", background: surface, color: primary, colorScheme: "inherit", display: "flex", flexDirection: "column", fontFamily: "var(--dsw-font-family, ui-sans-serif, system-ui)", overflow: "hidden" },
-  panelHeader: { minHeight: 0, padding: "10px 16px", borderBottom: border, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 },
-  brandMark: { width: 34, height: 34, display: "grid", placeItems: "center", flexShrink: 0 },
+  panelHeader: { minHeight: 0, padding: "10px 16px", borderBottom: border, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
   headingCopy: { minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 3 },
   panelTitle: { fontSize: 15, lineHeight: "20px" },
-  panelSubtitle: { fontSize: 12, lineHeight: "16px", color: muted, overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 },
-  iconButton: { width: 34, height: 34, flexShrink: 0, display: "grid", placeItems: "center", padding: 0, border, borderRadius: 9, color: "inherit", background: "transparent", cursor: "pointer", lineHeight: 0 },
+  panelSubtitle: { fontSize: 12, lineHeight: "16px", color: muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  iconButton: { width: 30, height: 30, flexShrink: 0, display: "grid", placeItems: "center", padding: 0, border, borderRadius: 8, color: "inherit", background: "transparent", cursor: "pointer", lineHeight: 0 },
   panelBody: { flex: 1, minHeight: 0, overflowY: "auto", padding: 16 },
   panelFooter: { minHeight: 42, flexShrink: 0, borderTop: border, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: surface, fontSize: 11 },
   footerProduct: { color: tertiary },

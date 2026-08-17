@@ -1,10 +1,115 @@
 # dsh-oomol
 
+[English](../README.md)
+
 这是面向 DeepSeek Harness 的 OOMOL Connector 插件：连接应用并调用 Actions。
 
 当前实现使用 DeepSeek Harness 官方 Streamable HTTP MCP Client，连接 OOMOL 的渐进式 Connector MCP Endpoint。Workflow 不属于当前版本的能力范围。
 
 Gmail、Slack、Notion、GitHub 等 Provider 的 OAuth Token 和 API Key 继续保存在 OOMOL Connector 中；DeepSeek Harness 只持有一个专用、可撤销的 OOMOL MCP Client Key。
+
+## 快速开始
+
+### 准备条件
+
+- Node.js `22.19` 或更高版本，或 Node.js `24+`；
+- DeepSeek Harness；
+- 一个 [OOMOL Console](https://console.oomol.com/) 账号。
+
+### 1. 安装插件
+
+推荐把下面这段提示词粘贴到具有终端权限的 DeepSeek Harness 会话中：
+
+```text
+请使用官方 dsh plugin CLI，把最新稳定版 OOMOL Connector 插件
+（dsh-oomol）安装到我的 DeepSeek Harness web profile。
+
+安装前确认 Node.js 版本不低于 22.19，并确认 dsh CLI 可用。不要使用
+sudo，不要索取、读取、打印或保存任何 API Key，也不要修改无关的
+Harness profile 或配置。
+
+安装后验证插件已经成功添加。如果必须重启当前 Harness，请不要终止本
+会话，只告诉我准确的重启命令。然后指导我前往“设置 > 插件 > OOMOL
+Connector”配置 OOMOL MCP API Key。如果安装失败，请停止并展示原始错误，
+不要尝试无关的变通方案。
+```
+
+也可以手动安装到 Web profile：
+
+```bash
+dsh plugin --profile web add -w dsh-oomol
+```
+
+### 2. 重启 DeepSeek Harness
+
+插件会在 Harness 重启后生效：
+
+```bash
+dsh web
+```
+
+打开终端输出的地址。
+
+### 3. 获取 OOMOL MCP API Key
+
+打开 [OOMOL Console](https://console.oomol.com/)，注册或登录账号。在左侧展开 **More**，进入 **API Keys**，找到 **OOMOL MCP API key** 区域，点击 **Show** 并复制其中的 Key。
+
+请使用 **OOMOL MCP API key** 区域里的 Key，不要使用上方的 Default API key，也不要使用下方的 User keys。
+
+![在 OOMOL Console 获取 MCP API Key](./images/oomol-console-mcp-api-key.png)
+
+这个 Key 是专门用于 Harness 的 OOMOL MCP 客户端 Key，不是 DeepSeek 模型 API Key，也不是 Gmail、Notion、GitHub 等 Provider 的凭据。请把它当作 Secret：不要发到聊天中、提交到 Git，或在截图中显示它的值。
+
+### 4. 在 DeepSeek Harness 中配置 Key
+
+1. 打开 DeepSeek Harness 的 **设置**；
+2. 选择 **插件**；
+3. 保持在 **插件配置** 标签页；
+4. 找到并展开 **OOMOL Connector**；
+5. 粘贴 MCP Key，点击 **保存 Key**；
+6. 点击 **测试连接**；
+7. 确认连接状态变为 **已连接**。
+
+保存成功后，卡片会显示 **已配置**，并提示 MCP Key 已安全保存。Harness 不会再次显示已保存的值；只有轮换 Key 时才需要使用 **更换 Key**。
+
+![在 DeepSeek Harness 中配置 OOMOL Connector](./images/deepseek-harness-oomol-settings.png)
+
+浏览器只会收到 Key 是否已配置、来源和是否可写，不会收到已保存的 Key 明文。
+
+### 5. 打开连接中心并连接应用
+
+测试连接成功后，在会话标题栏点击 **连接**。OOMOL 连接中心会在 Harness 官方右侧详情栏中打开；可以搜索应用，并完成 OAuth、API Key 或其他凭据连接流程。
+
+![在 DeepSeek Harness 中打开 OOMOL 连接中心](./images/deepseek-harness-connections.png)
+
+Provider OAuth Token 和 Provider API Key 始终保存在 OOMOL Connector 中，DeepSeek Harness 只保存专用的 OOMOL MCP Key。
+
+看到以下结果就说明配置成功：
+
+- **设置 > 插件** 中出现 OOMOL Connector；
+- 卡片显示 **已配置**；
+- **测试连接** 显示 **已连接**；
+- 会话标题栏的 **连接** 按钮可以打开右侧面板；
+- 已连接应用出现在列表中。
+
+### 6. 开始使用
+
+建议先使用只读的发现提示词：
+
+```text
+显示这个 OOMOL 账号当前可用的连接器。
+```
+
+```text
+查找我的 Notion 连接器支持哪些 Actions，先不要执行。
+```
+
+对于有副作用的操作，要求 Harness 先展示参数并等待确认：
+
+```text
+准备一个向已连接的表格添加一行的 Action。先展示目标账号、Action 名称和
+准备写入的值，得到我的确认后再执行。
+```
 
 ## 当前状态
 

@@ -23,9 +23,17 @@ With this plugin, DeepSeek Harness can:
 
 The plugin deliberately keeps a small discovery surface instead of registering every Connector Action as a permanent Harness tool.
 
-## Install with one prompt
+## Quick start
 
-Paste this prompt into a DeepSeek Harness session that has terminal access:
+### Requirements
+
+- Node.js `22.19` or later, or Node.js `24+`
+- DeepSeek Harness
+- an [OOMOL Console](https://console.oomol.com/) account
+
+### 1. Install the plugin
+
+The recommended path is to paste this prompt into a DeepSeek Harness session that has terminal access:
 
 ```text
 Install the latest stable OOMOL Connector plugin (`dsh-oomol`) into my
@@ -42,34 +50,29 @@ give me the exact restart command instead. Then guide me to Settings > Plugins
 stop and show me the exact error instead of trying unrelated workarounds.
 ```
 
-The installation requires a Harness restart before the plugin becomes active.
-
-## Manual installation
-
-### Requirements
-
-- Node.js `22.19` or later, or Node.js `24+`
-- DeepSeek Harness
-- an OOMOL account
-- a dedicated OOMOL MCP API key
-
-Install the plugin into the Web profile:
+Or install the package manually into the Web profile:
 
 ```bash
 dsh plugin --profile web add -w dsh-oomol
 ```
 
-Start or restart DeepSeek Harness:
+### 2. Restart DeepSeek Harness
+
+The plugin becomes active after Harness restarts:
 
 ```bash
 dsh web
 ```
 
-Open the URL printed in the terminal, then continue with [Connect your OOMOL account](#connect-your-oomol-account).
+Open the URL printed in the terminal.
 
-## Connect your OOMOL account
+### 3. Get an OOMOL MCP API key
 
-Create a dedicated key on the [OOMOL API keys page](https://console.oomol.com/api-key). This is an **OOMOL MCP client key**. It is not:
+Open [OOMOL Console](https://console.oomol.com/) and sign in or create an account. In the sidebar, expand **More**, select **API Keys**, and find the **OOMOL MCP API key** section. Select **Show**, then copy the key from that section—not the Default API key or one of the User keys.
+
+![Get the OOMOL MCP API key in OOMOL Console](./docs/images/oomol-console-mcp-api-key.png)
+
+The key is a dedicated **OOMOL MCP client key**. It is not:
 
 - your DeepSeek model API key;
 - an OAuth token or API key for Gmail, Notion, Slack, GitHub, or another Provider; or
@@ -77,20 +80,67 @@ Create a dedicated key on the [OOMOL API keys page](https://console.oomol.com/ap
 
 Provider OAuth tokens and API keys remain in OOMOL Connector. DeepSeek Harness stores only the dedicated, revocable OOMOL MCP key.
 
-Do not paste the key into a chat message. Configure it through the write-only settings field:
+Treat the key as a secret. Do not paste it into a chat message, commit it to Git, or include its value in a screenshot.
+
+### 4. Configure the key in DeepSeek Harness
+
+Configure the key through Harness's write-only credential field:
 
 1. Open **Settings** in DeepSeek Harness.
 2. Select **Plugins**.
 3. Find **OOMOL Connector** under plugin configuration.
-4. Paste the dedicated OOMOL MCP key and select **Save key**.
+4. Expand the card, paste the dedicated OOMOL MCP key, and select **Save key**.
 5. Select **Test connection**.
 6. Confirm that the connection state changes to **Connected**.
 
+After the key is saved, the card shows **Configured** and confirms that the key is securely stored. Harness does not display the stored value again; use **Replace key** only when rotating it.
+
+![Configured OOMOL Connector in DeepSeek Harness](./docs/images/deepseek-harness-oomol-settings.png)
+
 The browser receives only whether the key is configured, its source, and whether it is writable. It never receives the stored value.
+
+### 5. Open Connections and connect an app
 
 After the test succeeds, select **Connections** in a conversation header to open Harness's native right-side details panel. The panel uses the official `details` slot and `ctx.layout` open/close service, so Harness owns its width, resizing, responsive concession, and session behavior. The **Manage connections** link in plugin settings opens the full OOMOL Console. OAuth continues in a popup; API keys and custom credentials are submitted directly to OOMOL Connector and are never saved by this plugin. The permanent OOMOL MCP key remains in the Harness Host and is never put in a browser URL or returned to browser code.
 
+![Open OOMOL Connections in DeepSeek Harness](./docs/images/deepseek-harness-connections.png)
+
 The details panel covers the common connection flow. Use the [OOMOL Console](https://console.oomol.com/connections) for advanced connection settings that are not yet exposed in the preview.
+
+You are ready when:
+
+- **OOMOL Connector** appears under **Settings > Plugins**;
+- the card shows **Configured**;
+- **Test connection** reports **Connected**;
+- the **Connections** button opens the right-side panel; and
+- your connected apps appear in the list.
+
+### 6. Try it
+
+Start with read-only discovery prompts:
+
+```text
+Show me the OOMOL connectors available to this account.
+```
+
+```text
+Find the available Actions for my Notion connector. Do not execute anything.
+```
+
+```text
+Check whether one of my connected apps can create a calendar event. Inspect
+the Action schema first and do not execute it yet.
+```
+
+For an Action with side effects, ask Harness to show the proposed arguments and wait for confirmation:
+
+```text
+Prepare an Action that adds a row to my connected spreadsheet. Show me the
+target account, Action name, and proposed values, then ask for confirmation
+before executing it.
+```
+
+## Configuration
 
 ### Team connections
 
@@ -113,31 +163,6 @@ dsh web
 ```
 
 A key supplied by the launch environment is read-only in the settings card and must be changed at its source.
-
-## Try it
-
-After the connection test succeeds, start with read-only discovery prompts:
-
-```text
-Show me the OOMOL connectors available to this account.
-```
-
-```text
-Find the available Actions for my Notion connector. Do not execute anything.
-```
-
-```text
-Check whether one of my connected apps can create a calendar event. Inspect
-the Action schema first and do not execute it yet.
-```
-
-For an Action with side effects, ask Harness to show the proposed arguments and wait for confirmation:
-
-```text
-Prepare an Action that adds a row to my connected spreadsheet. Show me the
-target account, Action name, and proposed values, then ask for confirmation
-before executing it.
-```
 
 ## How it works
 
