@@ -173,7 +173,7 @@ describe("OOMOL Connections RPC", () => {
 
     const response = await handler("connections/list", {}, signal)
 
-    expect(response).toMatchObject({ ok: false, error: { details: { reason: "unconfigured" } } })
+    expect(response).toMatchObject({ ok: false, error: { reason: "unconfigured" } })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

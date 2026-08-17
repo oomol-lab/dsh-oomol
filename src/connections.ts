@@ -401,8 +401,8 @@ function isPresent<T>(value: T | undefined): value is T {
   return value !== undefined
 }
 
-function rpcError(code: string, message: string) {
-  return { ok: false as const, error: { code: "internal" as const, message, details: { reason: code } } }
+function rpcError(code: string, _message: string) {
+  return { ok: false as const, error: { reason: code } }
 }
 
 class ConnectionsRequestError extends Error {

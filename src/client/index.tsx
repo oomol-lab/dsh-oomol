@@ -98,7 +98,7 @@ const en: Record<LocaleKey, string> = {
   removed: "Key removed. OOMOL tools will be unloaded.",
   failed: "The operation failed. Check the Harness logs and credential source.",
   links: "OOMOL Console",
-  connections: "Manage connections",
+  connections: "Manage in Console",
   keys: "Manage API keys",
   logs: "View run logs",
 }
@@ -130,7 +130,7 @@ const zh: Record<LocaleKey, string> = {
   removed: "Key 已删除，OOMOL 工具将被卸载。",
   failed: "操作失败，请检查 Harness 日志和凭据来源。",
   links: "OOMOL 控制台",
-  connections: "管理连接",
+  connections: "在 Console 管理连接",
   keys: "管理 API Key",
   logs: "查看运行日志",
 }
@@ -294,7 +294,7 @@ export function apply(ctx: ClientContext): void {
 
         <div style={styles.links}>
           <span style={styles.linksLabel}>{t("links")}</span>
-          <button type="button" style={styles.linkButton} onClick={drawer.open}>{t("connections")}</button>
+          <a href="https://console.oomol.com/connections" target="_blank" rel="noreferrer">{t("connections")}</a>
           <a href="https://console.oomol.com/api-key" target="_blank" rel="noreferrer">{t("keys")}</a>
           <a href="https://console.oomol.com" target="_blank" rel="noreferrer">{t("logs")}</a>
         </div>
@@ -338,7 +338,7 @@ function localeKeyForPhase(phase: ConnectionPhase): LocaleKey {
 const styles = {
   card: {
     listStyle: "none",
-    border: "1px solid color-mix(in srgb, currentColor 14%, transparent)",
+    border: "1px solid var(--dsw-alias-border-l2, rgba(38,49,72,.12))",
     borderRadius: 12,
     padding: 18,
     display: "grid",
@@ -347,18 +347,17 @@ const styles = {
   header: { display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" },
   title: { fontWeight: 650, fontSize: 16 },
   description: { opacity: 0.68, marginTop: 4, fontSize: 13 },
-  badgeSet: { color: "#147d4f", background: "#e7f7ef", borderRadius: 999, padding: "3px 9px", fontSize: 12 },
-  badgeUnset: { opacity: 0.65, background: "color-mix(in srgb, currentColor 8%, transparent)", borderRadius: 999, padding: "3px 9px", fontSize: 12 },
+  badgeSet: { color: "var(--dsw-alias-state-success-primary, #12a150)", background: "var(--dsw-alias-state-success-tertiary, #e7f7ed)", borderRadius: 999, padding: "3px 9px", fontSize: 12 },
+  badgeUnset: { color: "var(--dsw-alias-label-secondary, #61666b)", background: "var(--dsw-alias-bg-layer-2, #f5f6f7)", borderRadius: 999, padding: "3px 9px", fontSize: 12 },
   label: { fontWeight: 600, fontSize: 13, marginTop: 6 },
-  input: { width: "100%", boxSizing: "border-box" as const, border: "1px solid color-mix(in srgb, currentColor 18%, transparent)", borderRadius: 8, padding: "9px 11px", background: "transparent", color: "inherit" },
+  input: { width: "100%", boxSizing: "border-box" as const, border: "1px solid var(--dsw-alias-border-l2, rgba(38,49,72,.12))", borderRadius: 8, padding: "9px 11px", background: "var(--dsw-alias-bg-layer-1, #fff)", color: "inherit" },
   hint: { opacity: 0.62, fontSize: 12, margin: 0 },
-  warning: { color: "#a05a00", fontSize: 12, margin: 0 },
-  error: { color: "#b42318", fontSize: 12, margin: 0 },
-  success: { color: "#147d4f", fontSize: 12, margin: 0 },
+  warning: { color: "var(--dsw-alias-state-warn-primary, #e59a00)", fontSize: 12, margin: 0 },
+  error: { color: "var(--dsw-alias-state-error-primary, #e5484d)", fontSize: 12, margin: 0 },
+  success: { color: "var(--dsw-alias-state-success-primary, #12a150)", fontSize: 12, margin: 0 },
   actions: { display: "flex", gap: 8, flexWrap: "wrap" as const, marginTop: 4 },
-  primary: { border: 0, borderRadius: 8, padding: "8px 13px", background: "#4f46e5", color: "white", cursor: "pointer" },
-  secondary: { border: "1px solid color-mix(in srgb, currentColor 18%, transparent)", borderRadius: 8, padding: "8px 13px", background: "transparent", color: "inherit", cursor: "pointer" },
-  links: { display: "flex", gap: 12, flexWrap: "wrap" as const, borderTop: "1px solid color-mix(in srgb, currentColor 10%, transparent)", paddingTop: 12, marginTop: 4, fontSize: 12 },
+  primary: { border: 0, borderRadius: 8, padding: "8px 13px", background: "var(--dsw-alias-button-primary-fill, #3964fe)", color: "var(--dsw-alias-label-primary-foreground, #fff)", cursor: "pointer" },
+  secondary: { border: "1px solid var(--dsw-alias-border-l2, rgba(38,49,72,.12))", borderRadius: 8, padding: "8px 13px", background: "transparent", color: "inherit", cursor: "pointer" },
+  links: { display: "flex", gap: 12, flexWrap: "wrap" as const, borderTop: "1px solid var(--dsw-alias-border-l1, rgba(38,49,72,.08))", paddingTop: 12, marginTop: 4, fontSize: 12 },
   linksLabel: { opacity: 0.55 },
-  linkButton: { border: 0, padding: 0, background: "transparent", color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" },
 } as const

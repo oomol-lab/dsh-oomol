@@ -19,7 +19,7 @@ With this plugin, DeepSeek Harness can:
 - execute Connector Actions through OOMOL's hosted MCP endpoint;
 - open a native right-side Connections drawer to add, inspect, or disconnect Provider accounts;
 - reload the OOMOL connection after its key is added, rotated, or removed; and
-- test MCP initialization and discovery from **Settings > Plugins**.
+- test OOMOL authorization and Provider-catalog access from **Settings > Plugins**.
 
 The plugin deliberately keeps a small discovery surface instead of registering every Connector Action as a permanent Harness tool.
 
@@ -88,7 +88,7 @@ Do not paste the key into a chat message. Configure it through the write-only se
 
 The browser receives only whether the key is configured, its source, and whether it is writable. It never receives the stored value.
 
-After the test succeeds, select **Connections** in a conversation header. You can also open the same right-side drawer from **Settings > Plugins > OOMOL Connector > Manage connections**. OAuth continues in a popup; API keys and custom credentials are submitted directly to OOMOL Connector and are never saved by this plugin. The permanent OOMOL MCP key remains in the Harness Host and is never put in the drawer URL or returned to browser code.
+After the test succeeds, select **Connections** in a conversation header to open the native drawer. The **Manage connections** link in plugin settings opens the full OOMOL Console. OAuth continues in a popup; API keys and custom credentials are submitted directly to OOMOL Connector and are never saved by this plugin. The permanent OOMOL MCP key remains in the Harness Host and is never put in the drawer URL or returned to browser code.
 
 The drawer covers the common connection flow. Use the [OOMOL Console](https://console.oomol.com/connections) for advanced connection settings that are not yet exposed in the preview.
 
@@ -170,7 +170,7 @@ For implementation details, see [Architecture](./docs/ARCHITECTURE.md).
 | Connector Action execution | Available |
 | Write-only key configuration in Settings | Available |
 | Live connection status and connection test | Available |
-| Native right-side connection manager | Preview |
+| Native right-side connection manager | Available |
 | Personal OOMOL identity | Available |
 | Team identity through the launch environment | Available |
 | Team selection in Settings | Planned |
@@ -265,7 +265,7 @@ Run the environment doctor without printing credentials:
 pnpm run doctor
 ```
 
-With a real OOMOL MCP key, verify hosted MCP initialization and the progressive discovery surface:
+With a real OOMOL MCP key, verify Connector authorization and Provider-catalog access:
 
 ```bash
 OOMOL_MCP_API_KEY="..." pnpm verify:connector

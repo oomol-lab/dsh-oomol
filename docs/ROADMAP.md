@@ -13,7 +13,7 @@
 ## Phase 1 — installable MVP
 
 - [ ] Verify authenticated Streamable HTTP initialization against the hosted endpoint (`pnpm verify:connector` is ready; a real key run is pending)
-- [ ] Verify progressive tool discovery and structured results (first-page discovery is covered by the verifier; Action execution is pending)
+- [ ] Verify progressive tool discovery, structured results, and authenticated Action execution
 - [ ] Test personal, team, and multiple-connection identities
 - [ ] Test 401, 429, 5xx, timeout, reconnect exhaustion, and schema changes
 - [ ] Validate action-level approval UX

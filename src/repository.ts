@@ -62,6 +62,6 @@ function repositoryResult(stars: string) {
   }
 }
 
-function rpcError(code: string, message: string) {
-  return { ok: false as const, error: { code: "internal" as const, message, details: { repositoryCode: code } } }
+function rpcError(code: string, _message: string) {
+  return { ok: false as const, error: { reason: code } }
 }

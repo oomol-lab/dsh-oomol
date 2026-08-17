@@ -42,10 +42,6 @@
       "platform": "web"
     }
   },
-  "dshCompat": {
-    "anchorVersion": "0.1.0-rc.6",
-    "note": "Uses official DeepSeek Harness plugin APIs. This value records the CI test baseline and is not a hard runtime pin."
-  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.client.json && tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
@@ -95,8 +91,7 @@
     "@deepseek-ai/dsh-launch-environment": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-mcp-client": "^0.1.0-rc.6",
     "@deepseek-ai/schemastery": "^3.18.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
@@ -137,9 +132,6 @@
     },
     "react": {
       "optional": true
-    },
-    "react-dom": {
-      "optional": true
     }
   },
   "devDependencies": {
@@ -158,14 +150,9 @@
     "@deepseek-ai/schemastery": "3.18.1",
     "@types/node": "^22.18.0",
     "@types/react": "~18.3.1",
-    "@types/react-dom": "~18.3.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "tsdown": "^0.22.2",
     "typescript": "^5.9.2",
     "vitest": "^4.1.10"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0"
   }
 }

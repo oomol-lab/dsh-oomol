@@ -9,8 +9,7 @@ import Schema from "@deepseek-ai/schemastery"
 import { createConnectionsRpcHandler } from "./connections.js"
 import { createRepositoryRpcHandler } from "./repository.js"
 import {
-  probeOomolConnection,
-  statusFromProbeError,
+  statusFromConnectionReason,
   type OomolConnectionStatus,
 } from "./health.js"
 import {
@@ -55,43 +54,43 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     readEnvironment: (name) => launchEnvironment.get(name)?.value,
   })
 
+  const handleConnectionsRpc = createConnectionsRpcHandler({ resolveConnection })
+
   const testConnection = async (): Promise<OomolConnectionStatus> => {
     const revision = ++statusRevision
-    const resolved = await resolveConnection()
-    if (!resolved) {
-      status = { phase: "unconfigured", checkedAt: new Date().toISOString() }
-      return status
-    }
-
     status = { phase: "connecting" }
-    try {
-      const result = await probeOomolConnection(resolved)
-      const next: OomolConnectionStatus = {
-        phase: "connected",
-        checkedAt: new Date().toISOString(),
-        ...result,
-      }
-      if (revision === statusRevision) status = next
-    } catch (error) {
-      const next = statusFromProbeError(error)
-      if (revision === statusRevision) status = next
-    }
+    const result = await handleConnectionsRpc(
+      "connections/list",
+      {},
+      AbortSignal.timeout(Math.min(config.toolCallTimeoutMs ?? 60_000, 15_000)),
+    )
+    const checkedAt = new Date().toISOString()
+    const next: OomolConnectionStatus = result.ok
+      ? { phase: "connected", checkedAt }
+      : result.error.reason === "unconfigured"
+        ? { phase: "unconfigured", checkedAt }
+        : statusFromConnectionReason(result.error.reason, checkedAt)
+    if (revision === statusRevision) status = next
     return status
   }
 
-  const handleConnectionsRpc = createConnectionsRpcHandler({ resolveConnection })
   const handleRepositoryRpc = createRepositoryRpcHandler()
 
-  ctx.connection.rpc.handle("/oomol", async (endpoint, payload, signal) => {
-    if (endpoint === "status") return { ok: true, value: status }
-    if (endpoint === "test") return { ok: true, value: await testConnection() }
-    if (endpoint.startsWith("repository/")) return handleRepositoryRpc(endpoint, signal)
-    if (endpoint.startsWith("connections/")) return handleConnectionsRpc(endpoint, payload, signal)
+  const handleOomolRpc = async (endpoint: string, payload: unknown, signal: AbortSignal) => {
+    if (endpoint === "status") return { ok: true as const, value: status }
+    if (endpoint === "test") return { ok: true as const, value: await testConnection() }
+    if (endpoint.startsWith("repository/")) return { ok: true as const, value: await handleRepositoryRpc(endpoint, signal) }
+    if (endpoint.startsWith("connections/")) return { ok: true as const, value: await handleConnectionsRpc(endpoint, payload, signal) }
     return {
-      ok: false,
-      error: { code: "internal", message: "Unknown OOMOL RPC endpoint", details: {} },
+      ok: false as const,
+      error: { code: "internal" as const, message: "Unknown OOMOL RPC endpoint", details: {} },
     }
-  }, { authority: "loopback" })
+  }
+
+  ctx.effect(
+    () => ctx.connection.rpc.handle("/oomol", handleOomolRpc, { authority: "loopback" }),
+    "oomol: loopback RPC",
+  )
 
   const reload = (initial: boolean): Promise<void> => {
     const operation = reloadQueue.catch(() => undefined).then(async () => {
@@ -128,7 +127,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         activeClient = client
       } catch (error) {
         await client.dispose()
-        status = statusFromProbeError(error)
+        status = { phase: "unavailable", checkedAt: new Date().toISOString(), errorCode: "unavailable" }
         if (initial && resolved.failOnStartupError) throw error
       }
     })
@@ -163,6 +162,6 @@ export {
   resolveOomolConnection,
   resolveOomolConnectionIfConfigured,
 } from "./runtime.js"
-export { probeOomolConnection, statusFromProbeError } from "./health.js"
-export type { OomolConnectionPhase, OomolConnectionStatus, OomolProbeResult } from "./health.js"
+export { statusFromConnectionReason } from "./health.js"
+export type { OomolConnectionPhase, OomolConnectionStatus } from "./health.js"
 export type { OomolConnectorConfig, ResolvedOomolConnection, RuntimeValues } from "./runtime.js"

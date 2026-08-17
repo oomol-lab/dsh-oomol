@@ -15,9 +15,9 @@ The plugin is deliberately thin. It resolves an OOMOL MCP client credential, con
 
 The Host plugin remains active while the credential is absent. Its browser half writes the key through the loopback-fenced Harness Credentials API; `credentials/updated` then causes the Host half to dispose the old MCP client and mount a new one. The browser receives credential metadata only and never receives the value.
 
-Connection testing uses a short-lived MCP initialization plus first-page `tools/list` probe. A loopback-only `/oomol` RPC channel returns the sanitized phase, server identity, and discovery-tool count. Raw remote errors and request headers never cross into the browser.
+Connection testing checks Connector authorization and Provider-catalog access. The official DeepSeek Harness MCP client remains the sole runtime MCP bridge and owns initialization, discovery, tool registration, and reconnect behavior. A loopback-only `/oomol` RPC channel returns sanitized connection state; raw remote errors and request headers never cross into the browser.
 
-The same loopback-only channel provides a small Connections BFF for the native right-side drawer. The browser receives a sanitized Provider catalog and connection metadata. The Host resolves the permanent MCP key and calls fixed OOMOL Connector REST routes; the permanent key never enters browser state or a URL. OAuth uses the existing Console callback in a popup and the drawer detects completion by polling sanitized connection metadata, so this preview does not require Console changes.
+The same loopback-only channel provides a small Connections BFF for the native right-side drawer. The browser receives a sanitized Provider catalog and connection metadata. The Host resolves the permanent MCP key and calls fixed OOMOL Connector REST routes; the permanent key never enters browser state or a URL. OAuth uses the existing Console callback in a popup and the drawer detects completion by polling sanitized connection metadata, so this flow does not require Console changes.
 
 ## Responsibilities
 

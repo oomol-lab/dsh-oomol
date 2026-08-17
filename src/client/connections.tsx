@@ -13,7 +13,6 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react"
-import { createPortal } from "react-dom"
 import { TimedMemoryCache } from "./connections-cache.js"
 
 export const CONNECTIONS_NS = "oomol.connections"
@@ -59,7 +58,8 @@ type ConnectionsLocaleKey =
   | "poweredBy"
   | "githubStars"
   | "unsupported"
-  | "disconnectConfirm"
+  | "confirmDisconnect"
+  | "cancel"
   | "errorCancelled"
   | "errorUnavailable"
   | "errorUnauthorized"
@@ -115,7 +115,8 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   poweredBy: "Powered by Open Connector",
   githubStars: "GitHub stars",
   unsupported: "This authentication method is not available here yet.",
-  disconnectConfirm: "Disconnect {account}?",
+  confirmDisconnect: "Confirm",
+  cancel: "Cancel",
   errorCancelled: "The request was cancelled.",
   errorUnavailable: "OOMOL Connections is temporarily unavailable. Try again later.",
   errorUnauthorized: "The OOMOL MCP key is invalid or does not have access.",
@@ -166,7 +167,8 @@ export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   poweredBy: "Powered by Open Connector",
   githubStars: "GitHub Star 数",
   unsupported: "当前暂不支持这种认证方式。",
-  disconnectConfirm: "确定要断开 {account} 的连接吗？",
+  confirmDisconnect: "确认断开",
+  cancel: "取消",
   errorCancelled: "请求已取消。",
   errorUnavailable: "OOMOL 连接服务暂时不可用，请稍后重试。",
   errorUnauthorized: "OOMOL MCP Key 无效或没有访问权限。",
@@ -335,10 +337,7 @@ export function createConnectionsComponents(connection: ConnectionHandle, contro
   function ConnectionsOverlay({ t }: OverlayProps) {
     const open = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
     if (!open) return null
-    return createPortal(
-      <ConnectionsDrawer connection={connection} controller={controller} t={t} />,
-      document.body,
-    )
+    return <ConnectionsDrawer connection={connection} controller={controller} t={t} />
   }
 
   return { ConnectionsHeaderButton, ConnectionsOverlay }
@@ -370,10 +369,10 @@ function ConnectionsDrawer({
 
   const call = useCallback(async <T,>(endpoint: string, payload: unknown): Promise<T> => {
     const response = await connection.rpc.call("/oomol", endpoint, payload)
-    if (!response.ok) {
-      throw new Error(t(localeKeyForConnectionsError(response.error)))
-    }
-    return response.value as T
+    if (!response.ok) throw new Error(t("errorUnknown"))
+    const result = domainResultOf<T>(response.value)
+    if (!result.ok) throw new Error(t(localeKeyForConnectionsReason(result.error.reason)))
+    return result.value
   }, [connection, t])
 
   const refresh = useCallback(async (quiet = false) => {
@@ -585,10 +584,9 @@ function ProviderView({
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
 
   const disconnect = async (app: ConnectedApp) => {
-    const account = app.accountLabel || app.alias || app.displayName
-    if (!window.confirm(t("disconnectConfirm", { account }))) return
     setDisconnecting(app.id)
     setError(null)
     try {
@@ -599,6 +597,7 @@ function ProviderView({
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
       setDisconnecting(null)
+      setConfirming(null)
     }
   }
 
@@ -626,9 +625,20 @@ function ProviderView({
                       <strong style={styles.accountName}>{app.alias || app.accountLabel || app.displayName}</strong>
                       <span style={styles.providerMeta}>{app.authType ? authTypeLabel(app.authType, t) : provider.displayName}</span>
                     </span>
-                    <button type="button" style={styles.dangerButton} disabled={disconnecting === app.id} onClick={() => { void disconnect(app) }}>
-                      {disconnecting === app.id ? t("disconnecting") : t("disconnect")}
-                    </button>
+                    {confirming === app.id ? (
+                      <span style={styles.accountActions}>
+                        <button type="button" style={styles.dangerButton} disabled={disconnecting === app.id} onClick={() => { void disconnect(app) }}>
+                          {disconnecting === app.id ? t("disconnecting") : t("confirmDisconnect")}
+                        </button>
+                        <button type="button" style={styles.compactSecondaryButton} disabled={disconnecting === app.id} onClick={() => setConfirming(null)}>
+                          {t("cancel")}
+                        </button>
+                      </span>
+                    ) : (
+                      <button type="button" style={styles.dangerButton} onClick={() => setConfirming(app.id)}>
+                        {t("disconnect")}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -902,12 +912,7 @@ function authTypeLabel(type: AuthType, t: (key: ConnectionsLocaleKey) => string)
   return t("noAuth")
 }
 
-function localeKeyForConnectionsError(error: unknown): ConnectionsLocaleKey {
-  if (typeof error !== "object" || error === null) return "errorUnknown"
-  const details = "details" in error && typeof error.details === "object" && error.details !== null
-    ? error.details as Record<string, unknown>
-    : undefined
-  const reason = typeof details?.reason === "string" ? details.reason : undefined
+function localeKeyForConnectionsReason(reason: string): ConnectionsLocaleKey {
   if (reason === "unconfigured") return "configureFirst"
   if (reason === "cancelled") return "errorCancelled"
   if (reason === "unavailable") return "errorUnavailable"
@@ -919,6 +924,18 @@ function localeKeyForConnectionsError(error: unknown): ConnectionsLocaleKey {
   if (reason === "unsupported") return "unsupported"
   if (reason === "not_found") return "errorNotFound"
   return "errorUnknown"
+}
+
+function domainResultOf<T>(value: unknown): { ok: true; value: T } | { ok: false; error: { reason: string } } {
+  if (typeof value !== "object" || value === null || !("ok" in value) || typeof value.ok !== "boolean") {
+    return { ok: false, error: { reason: "unknown" } }
+  }
+  if (value.ok === true && "value" in value) return { ok: true, value: value.value as T }
+  if (value.ok === false && "error" in value && typeof value.error === "object" && value.error !== null
+    && "reason" in value.error && typeof value.error.reason === "string") {
+    return { ok: false, error: { reason: value.error.reason } }
+  }
+  return { ok: false, error: { reason: "unknown" } }
 }
 
 function OomolMark({ size }: { size: number }) {
@@ -990,7 +1007,7 @@ const businessSurface = "var(--dsw-alias-state-business-tertiary, #e8efff)"
 const styles: Record<string, CSSProperties> = {
   headerButton: { border, minWidth: 104, height: 32, color: "var(--dsw-alias-label-primary, inherit)", cursor: "pointer", background: "transparent", borderRadius: 18, display: "inline-flex", justifyContent: "center", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 13, fontFamily: "inherit" },
   headerButtonActive: { background: "var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.14))", borderColor: "var(--dsw-alias-border-l3, rgba(127,127,127,.35))" },
-  overlay: { position: "fixed", inset: 0, zIndex: 2147483000, display: "flex", justifyContent: "flex-end", background: "var(--dsw-alias-bg-mask-1, rgba(0,0,0,.38))", backdropFilter: "var(--dsw-mask-blur, blur(2px))", pointerEvents: "auto" },
+  overlay: { position: "absolute", inset: 0, display: "flex", justifyContent: "flex-end", background: "var(--dsw-alias-bg-mask-1, rgba(0,0,0,.38))", backdropFilter: "var(--dsw-mask-blur, blur(2px))", pointerEvents: "auto" },
   drawer: { width: "min(560px, calc(100vw - 42px))", height: "100%", background: surface, color: primary, colorScheme: "inherit", borderLeft: border, boxShadow: "var(--dsw-shadow-lv3, -18px 0 48px rgba(0,0,0,.18))", display: "flex", flexDirection: "column", fontFamily: "var(--dsw-font-family, ui-sans-serif, system-ui)", overflow: "hidden" },
   drawerHeader: { minHeight: 0, padding: "10px 16px", borderBottom: border, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 },
   brandMark: { width: 34, height: 34, display: "grid", placeItems: "center", flexShrink: 0 },
@@ -1030,7 +1047,9 @@ const styles: Record<string, CSSProperties> = {
   accountDot: { width: 8, height: 8, borderRadius: 999, background: success, boxShadow: `0 0 0 3px ${successSurface}` },
   accountDotWarning: { width: 8, height: 8, borderRadius: 999, background: warning, boxShadow: `0 0 0 3px ${warningSurface}` },
   accountName: { fontSize: 12 },
+  accountActions: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6 },
   dangerButton: { border, background: "var(--dsw-alias-interactive-bg-hover-danger, rgba(242,90,90,.08))", color: danger, borderRadius: 8, padding: "6px 9px", cursor: "pointer", font: "inherit", fontSize: 11 },
+  compactSecondaryButton: { border, background: "transparent", color: muted, borderRadius: 8, padding: "6px 9px", cursor: "pointer", font: "inherit", fontSize: 11 },
   form: { display: "grid", gap: 12 },
   authTabs: { display: "flex", flexWrap: "wrap", gap: 6 },
   authTab: { border, borderRadius: 8, background: "transparent", color: muted, padding: "6px 9px", cursor: "pointer", font: "inherit", fontSize: 11 },

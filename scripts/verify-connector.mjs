@@ -1,4 +1,3 @@
-import { probeOomolConnection } from "../lib/health.js"
 import { resolveOomolConnection } from "../lib/runtime.js"
 
 const key = process.env.OOMOL_MCP_API_KEY?.trim()
@@ -12,9 +11,14 @@ if (!key) {
   })
 
   try {
-    const result = await probeOomolConnection(connection)
-    process.stdout.write(`OK   MCP initialization: ${result.serverName ?? "server"}${result.serverVersion ? ` ${result.serverVersion}` : ""}\n`)
-    process.stdout.write(`OK   Progressive discovery tools: ${result.toolCount}\n`)
+    const url = new URL("/v1/providers", new URL(connection.endpoint).origin)
+    const response = await fetch(url, { headers: connection.headers, signal: AbortSignal.timeout(15_000) })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const envelope = await response.json()
+    const providers = Array.isArray(envelope?.data) ? envelope.data.length : undefined
+    if (providers === undefined) throw new Error("invalid response")
+    process.stdout.write("OK   Connector authorization\n")
+    process.stdout.write(`OK   Provider catalog: ${providers}\n`)
     process.stdout.write("The verifier never prints credential values.\n")
   } catch (error) {
     const message = error instanceof Error ? error.name : "unknown error"
