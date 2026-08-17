@@ -19,11 +19,13 @@ Gmail、Slack、Notion、GitHub 等 Provider 的 OAuth Token 和 API Key 继续�
 - 复用 DSH 官方 MCP Client 的工具发现、注册、超时和重连；
 - 无 Key 时正常启动，配置或轮换 Key 后自动重建 MCP Client；
 - Settings > Plugins 下的 OOMOL Key 配置卡片；
+- 会话标题栏和插件设置中可打开的原生右侧连接抽屉；
+- 在抽屉中查看、添加和断开 Connector 账号，OAuth 通过弹窗继续；
 - MCP 初始化与渐进式发现检测，以及不会泄露远端错误文本的连接状态；
 - Key 通过 Harness Credentials Service 只写保存，浏览器永远不会回读明文；
 - 确保 Secret 不进入 Bundle 配置的测试。
 
-浏览器无密钥复制配对和 Action 级策略仍在后续路线图中，详见 [架构](./ARCHITECTURE.md) 和 [路线图](./ROADMAP.md)。
+免复制 MCP Key 的配对流程和 Action 级策略仍在后续路线图中，详见 [架构](./ARCHITECTURE.md) 和 [路线图](./ROADMAP.md)。
 
 ## 开发
 
@@ -52,6 +54,8 @@ dsh plugin --profile web add -w /Users/wushuang/code/dsh-oomol
 ```
 
 启动 DeepSeek Harness 后可在 **设置 > 插件 > 插件配置 > OOMOL Connector** 中保存专用 MCP Key。Key 只会写入 Harness Credentials Service，页面只读取“是否已配置、来源和是否可写”。
+
+测试连接成功后，可点击会话标题栏的 **连接**，或点击插件设置卡片中的 **管理连接**，在右侧抽屉里新增、查看和断开 Connector 账号。永久 MCP Key 始终留在 Harness Host，不会放进页面 URL，也不会返回给浏览器；在表单中输入的 Provider API Key 或自定义凭据只会单次转发给 OOMOL Connector，本插件不会保存。
 
 也可以在启动 DeepSeek Harness 前通过环境变量提供 Key：
 

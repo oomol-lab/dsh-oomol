@@ -17,6 +17,8 @@ The Host plugin remains active while the credential is absent. Its browser half 
 
 Connection testing uses a short-lived MCP initialization plus first-page `tools/list` probe. A loopback-only `/oomol` RPC channel returns the sanitized phase, server identity, and discovery-tool count. Raw remote errors and request headers never cross into the browser.
 
+The same loopback-only channel provides a small Connections BFF for the native right-side drawer. The browser receives a sanitized Provider catalog and connection metadata. The Host resolves the permanent MCP key and calls fixed OOMOL Connector REST routes; the permanent key never enters browser state or a URL. OAuth uses the existing Console callback in a popup and the drawer detects completion by polling sanitized connection metadata, so this preview does not require Console changes.
+
 ## Responsibilities
 
 ### DeepSeek Harness
@@ -35,6 +37,7 @@ Connection testing uses a short-lived MCP initialization plus first-page `tools/
 - Web settings card for write-only key configuration
 - Credential-change-driven MCP client reload
 - Credential-safe connection health and explicit test-connection flow
+- Native Connections drawer and credential-fenced Connector REST bridge
 - Future pairing and approval presentation
 
 ### OOMOL Connector
@@ -54,7 +57,9 @@ Connection testing uses a short-lived MCP initialization plus first-page `tools/
 
 ## Credential boundary
 
-Provider secrets never enter this plugin. The plugin resolves one OOMOL MCP client key from the Harness credentials service or launching environment and passes it only in the MCP Authorization header. A missing key is an unconfigured state rather than a Host startup error, which keeps the settings surface available after first install.
+Provider secrets are never persisted by this plugin. API keys or custom credentials entered in the drawer make one loopback-fenced request to the Host, which forwards them to a fixed OOMOL Connector endpoint and discards them after the request. Provider tokens and stored credentials remain in OOMOL Connector and are never returned to the browser.
+
+The plugin resolves one OOMOL MCP client key from the Harness credentials service or launching environment. The Host uses it for MCP Authorization and for the Connections BFF, but never returns it to browser code or places it in a URL. A missing key is an unconfigured state rather than a Host startup error, which keeps the settings surface available after first install.
 
 The bundle patch contains only the credential reference name. This keeps the secret out of the profile manifest and the normal `--dump-config` output for the bundle layer.
 

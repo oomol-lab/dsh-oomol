@@ -17,6 +17,7 @@ With this plugin, DeepSeek Harness can:
 - search the Actions exposed by a Connector;
 - load an Action schema only when it is needed;
 - execute Connector Actions through OOMOL's hosted MCP endpoint;
+- open a native right-side Connections drawer to add, inspect, or disconnect Provider accounts;
 - reload the OOMOL connection after its key is added, rotated, or removed; and
 - test MCP initialization and discovery from **Settings > Plugins**.
 
@@ -87,7 +88,9 @@ Do not paste the key into a chat message. Configure it through the write-only se
 
 The browser receives only whether the key is configured, its source, and whether it is writable. It never receives the stored value.
 
-Manage connected apps in the [OOMOL Console](https://console.oomol.com/connections).
+After the test succeeds, select **Connections** in a conversation header. You can also open the same right-side drawer from **Settings > Plugins > OOMOL Connector > Manage connections**. OAuth continues in a popup; API keys and custom credentials are submitted directly to OOMOL Connector and are never saved by this plugin. The permanent OOMOL MCP key remains in the Harness Host and is never put in the drawer URL or returned to browser code.
+
+The drawer covers the common connection flow. Use the [OOMOL Console](https://console.oomol.com/connections) for advanced connection settings that are not yet exposed in the preview.
 
 ### Team connections
 
@@ -142,8 +145,12 @@ before executing it.
 flowchart LR
     U["User in DeepSeek Harness"] --> P["dsh-oomol"]
     K["Harness credential storage"] -->|"OOMOL MCP key"| P
+    U -->|"Manage connections"| D["Native Connections drawer"]
+    D -->|"Sanitized loopback RPC"| P
     P -->|"Discover and execute"| M["OOMOL Connector MCP"]
+    P -->|"Connect and disconnect"| R["OOMOL Connector REST API"]
     M --> A["Connected apps"]
+    R --> A
     C["Provider credentials in OOMOL"] --> A
 ```
 
@@ -163,10 +170,11 @@ For implementation details, see [Architecture](./docs/ARCHITECTURE.md).
 | Connector Action execution | Available |
 | Write-only key configuration in Settings | Available |
 | Live connection status and connection test | Available |
+| Native right-side connection manager | Preview |
 | Personal OOMOL identity | Available |
 | Team identity through the launch environment | Available |
 | Team selection in Settings | Planned |
-| Browser-based account pairing | Planned |
+| Passwordless MCP-key pairing | Planned |
 | Action-aware approval presentation | Planned |
 | Workflow authoring and execution | Not included |
 

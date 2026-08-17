@@ -6,6 +6,7 @@ import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment"
 import * as mcpClient from "@deepseek-ai/dsh-mcp-client"
 import Schema from "@deepseek-ai/schemastery"
 
+import { createConnectionsRpcHandler } from "./connections.js"
 import {
   probeOomolConnection,
   statusFromProbeError,
@@ -77,9 +78,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return status
   }
 
-  ctx.connection.rpc.handle("/oomol", async (endpoint) => {
+  const handleConnectionsRpc = createConnectionsRpcHandler({ resolveConnection })
+
+  ctx.connection.rpc.handle("/oomol", async (endpoint, payload, signal) => {
     if (endpoint === "status") return { ok: true, value: status }
     if (endpoint === "test") return { ok: true, value: await testConnection() }
+    if (endpoint.startsWith("connections/")) return handleConnectionsRpc(endpoint, payload, signal)
     return {
       ok: false,
       error: { code: "internal", message: "Unknown OOMOL RPC endpoint", details: {} },

@@ -4,6 +4,13 @@ import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client"
 import type {} from "@deepseek-ai/dsh-client-ui-settings-plugins/client"
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots"
 import { useCallback, useEffect, useState } from "react"
+import {
+  CONNECTIONS_NS,
+  ConnectionsDrawerController,
+  connectionsEn,
+  connectionsZh,
+  createConnectionsComponents,
+} from "./connections.js"
 
 const API_KEY_REF = "OOMOL_MCP_API_KEY"
 const NS = "oomol.settings"
@@ -131,8 +138,15 @@ const zh: Record<LocaleKey, string> = {
 export const inject = ["slots", "locale", "connection"]
 
 export function apply(ctx: ClientContext): void {
-  const { api } = ctx.get("connection") as ConnectionHandle
+  const connection = ctx.get("connection") as ConnectionHandle
+  const { api } = connection
+  const drawer = new ConnectionsDrawerController()
+  const { ConnectionsHeaderButton, ConnectionsOverlay } = createConnectionsComponents(connection, drawer)
   ctx.effect(() => ctx.locale.register(NS, { en, zh }), "oomol: settings dictionaries")
+  ctx.effect(
+    () => ctx.locale.register(CONNECTIONS_NS, { en: connectionsEn, zh: connectionsZh }),
+    "oomol: connections dictionaries",
+  )
 
   function OomolSettingsCard({ t }: CardProps) {
     const [credential, setCredential] = useState<CredentialState>({ configured: false, writable: true })
@@ -273,7 +287,7 @@ export function apply(ctx: ClientContext): void {
 
         <div style={styles.links}>
           <span style={styles.linksLabel}>{t("links")}</span>
-          <a href="https://console.oomol.com/connections" target="_blank" rel="noreferrer">{t("connections")}</a>
+          <button type="button" style={styles.linkButton} onClick={drawer.open}>{t("connections")}</button>
           <a href="https://console.oomol.com/api-key" target="_blank" rel="noreferrer">{t("keys")}</a>
           <a href="https://console.oomol.com" target="_blank" rel="noreferrer">{t("logs")}</a>
         </div>
@@ -287,6 +301,20 @@ export function apply(ctx: ClientContext): void {
     order: 30,
     locale: NS,
   }, OomolSettingsCard))
+
+  ctx.slots.inject("conversation.session.header.utilities", () => ctx.slots.register({
+    name: "conversation.session.header.utilities",
+    id: "oomol-connections",
+    order: 40,
+    locale: CONNECTIONS_NS,
+  }, ConnectionsHeaderButton))
+
+  ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+    name: "shell.overlay",
+    id: "oomol-connections-drawer",
+    order: 40,
+    locale: CONNECTIONS_NS,
+  }, ConnectionsOverlay))
 }
 
 function isConnectorStatus(value: unknown): value is ConnectorStatus {
@@ -325,4 +353,5 @@ const styles = {
   secondary: { border: "1px solid color-mix(in srgb, currentColor 18%, transparent)", borderRadius: 8, padding: "8px 13px", background: "transparent", color: "inherit", cursor: "pointer" },
   links: { display: "flex", gap: 12, flexWrap: "wrap" as const, borderTop: "1px solid color-mix(in srgb, currentColor 10%, transparent)", paddingTop: 12, marginTop: 4, fontSize: 12 },
   linksLabel: { opacity: 0.55 },
+  linkButton: { border: 0, padding: 0, background: "transparent", color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" },
 } as const
