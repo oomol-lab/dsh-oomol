@@ -8,7 +8,7 @@ Include the affected version, reproduction steps, impact, and any suggested miti
 
 ## Credential boundary
 
-- Provider OAuth tokens and stored API keys remain in OOMOL Connector. A credential entered in the Connections drawer is forwarded once through the loopback-fenced Host bridge and is not persisted by the plugin.
+- Provider OAuth tokens and stored API keys remain in OOMOL Connector. A credential entered in the Connections details panel is forwarded once through the loopback-fenced Host bridge and is not persisted by the plugin.
 - DeepSeek Harness stores only a dedicated, revocable OOMOL MCP client key.
 - Browser code receives only MCP-key configured/source/writable metadata and sanitized connection data; it never receives the stored MCP key or stored Provider credentials.
 - Credentials must not be committed, stored in `cordis.patch.yml`, logged, or included in diagnostics.

@@ -17,7 +17,7 @@ With this plugin, DeepSeek Harness can:
 - search the Actions exposed by a Connector;
 - load an Action schema only when it is needed;
 - execute Connector Actions through OOMOL's hosted MCP endpoint;
-- open a native right-side Connections drawer to add, inspect, or disconnect Provider accounts;
+- open a native right-side Connections details panel to add, inspect, or disconnect Provider accounts;
 - reload the OOMOL connection after its key is added, rotated, or removed; and
 - test OOMOL authorization and Provider-catalog access from **Settings > Plugins**.
 
@@ -88,9 +88,9 @@ Do not paste the key into a chat message. Configure it through the write-only se
 
 The browser receives only whether the key is configured, its source, and whether it is writable. It never receives the stored value.
 
-After the test succeeds, select **Connections** in a conversation header to open the native drawer. The **Manage connections** link in plugin settings opens the full OOMOL Console. OAuth continues in a popup; API keys and custom credentials are submitted directly to OOMOL Connector and are never saved by this plugin. The permanent OOMOL MCP key remains in the Harness Host and is never put in the drawer URL or returned to browser code.
+After the test succeeds, select **Connections** in a conversation header to open Harness's native right-side details panel. The panel uses the official `details` slot and `ctx.layout` open/close service, so Harness owns its width, resizing, responsive concession, and session behavior. The **Manage connections** link in plugin settings opens the full OOMOL Console. OAuth continues in a popup; API keys and custom credentials are submitted directly to OOMOL Connector and are never saved by this plugin. The permanent OOMOL MCP key remains in the Harness Host and is never put in a browser URL or returned to browser code.
 
-The drawer covers the common connection flow. Use the [OOMOL Console](https://console.oomol.com/connections) for advanced connection settings that are not yet exposed in the preview.
+The details panel covers the common connection flow. Use the [OOMOL Console](https://console.oomol.com/connections) for advanced connection settings that are not yet exposed in the preview.
 
 ### Team connections
 
@@ -145,7 +145,7 @@ before executing it.
 flowchart LR
     U["User in DeepSeek Harness"] --> P["dsh-oomol"]
     K["Harness credential storage"] -->|"OOMOL MCP key"| P
-    U -->|"Manage connections"| D["Native Connections drawer"]
+    U -->|"Manage connections"| D["Native Connections details panel"]
     D -->|"Sanitized loopback RPC"| P
     P -->|"Discover and execute"| M["OOMOL Connector MCP"]
     P -->|"Connect and disconnect"| R["OOMOL Connector REST API"]

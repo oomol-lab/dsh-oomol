@@ -27,7 +27,7 @@
 - [x] Show connecting, connected, unauthorized/rate-limited, and unavailable states without exposing remote error text
 - [ ] Add personal/team selection
 - [x] Add a native right-side connection manager plus Console and log fallbacks
-- [x] Add Provider OAuth, API-key, custom-credential, no-auth, and disconnect flows to the drawer
+- [x] Add Provider OAuth, API-key, custom-credential, no-auth, and disconnect flows to the native details panel
 - [x] Add an explicit test-connection flow (key rotation also reloads the MCP client)
 - [x] Never return credential values to the browser after storage
 

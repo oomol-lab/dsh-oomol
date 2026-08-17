@@ -6,7 +6,7 @@ import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots
 import { useCallback, useEffect, useState } from "react"
 import {
   CONNECTIONS_NS,
-  ConnectionsDrawerController,
+  ConnectionsController,
   connectionsEn,
   connectionsZh,
   createConnectionsComponents,
@@ -135,13 +135,13 @@ const zh: Record<LocaleKey, string> = {
   logs: "查看运行日志",
 }
 
-export const inject = ["slots", "locale", "connection"]
+export const inject = ["slots", "locale", "connection", "layout"]
 
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get("connection") as ConnectionHandle
   const { api } = connection
-  const drawer = new ConnectionsDrawerController()
-  const { ConnectionsHeaderButton, ConnectionsOverlay } = createConnectionsComponents(connection, drawer)
+  const connections = new ConnectionsController()
+  const { ConnectionsHeaderButton, ConnectionsDetails } = createConnectionsComponents(connection, connections, ctx.layout)
   ctx.effect(() => ctx.locale.register(NS, { en, zh }), "oomol: settings dictionaries")
   ctx.effect(
     () => ctx.locale.register(CONNECTIONS_NS, { en: connectionsEn, zh: connectionsZh }),
@@ -206,7 +206,7 @@ export function apply(ctx: ClientContext): void {
       try {
         const response = await api.credentials.set({ ref: API_KEY_REF, value })
         if (!response.result.ok) throw new Error(response.result.error.message)
-        drawer.clearCache()
+        connections.clearCache()
         setDraft("")
         setMessage("saved")
         await refresh()
@@ -225,7 +225,7 @@ export function apply(ctx: ClientContext): void {
       try {
         const response = await api.credentials.unset({ ref: API_KEY_REF })
         if (!response.result.ok) throw new Error(response.result.error.message)
-        drawer.clearCache()
+        connections.clearCache()
         setDraft("")
         setMessage("removed")
         await refresh()
@@ -316,12 +316,11 @@ export function apply(ctx: ClientContext): void {
     locale: CONNECTIONS_NS,
   }, ConnectionsHeaderButton))
 
-  ctx.slots.inject("shell.overlay", () => ctx.slots.register({
-    name: "shell.overlay",
-    id: "oomol-connections-drawer",
-    order: 40,
+  ctx.slots.inject("details", () => ctx.slots.register({
+    name: "details",
+    priority: -1,
     locale: CONNECTIONS_NS,
-  }, ConnectionsOverlay))
+  }, ConnectionsDetails))
 }
 
 function isConnectorStatus(value: unknown): value is ConnectorStatus {

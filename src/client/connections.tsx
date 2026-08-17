@@ -1,6 +1,6 @@
 import type { ConnectionHandle } from "@deepseek-ai/dsh-client-connection/client"
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client"
-import type {} from "@deepseek-ai/dsh-client-ui-layout/client"
+import type { ILayout } from "@deepseek-ai/dsh-client-ui-layout/client"
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots"
 import {
   useCallback,
@@ -8,7 +8,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type CSSProperties,
   type FormEvent,
   type ReactNode,
@@ -260,23 +259,10 @@ const OPEN_CONNECTOR_FALLBACK: RepositoryStatus = {
   stars: "4.7k",
 }
 
-export class ConnectionsDrawerController {
-  #open = false
-  #listeners = new Set<() => void>()
+export class ConnectionsController {
   #listCache = new TimedMemoryCache<"list", ConnectionsList>(CONNECTIONS_CACHE_FRESH_MS)
   #providerCache = new TimedMemoryCache<string, ProviderDetail>(CONNECTIONS_CACHE_FRESH_MS)
   #repositoryCache = new TimedMemoryCache<"open-connector", RepositoryStatus>(REPOSITORY_CACHE_FRESH_MS)
-
-  subscribe = (listener: () => void) => {
-    this.#listeners.add(listener)
-    return () => this.#listeners.delete(listener)
-  }
-
-  getSnapshot = () => this.#open
-
-  open = () => this.set(true)
-  close = () => this.set(false)
-  toggle = () => this.set(!this.#open)
 
   getListCache = () => this.#listCache.get("list")
 
@@ -306,27 +292,23 @@ export class ConnectionsDrawerController {
     this.#listCache.clear()
     this.#providerCache.clear()
   }
-
-  private set(open: boolean) {
-    if (this.#open === open) return
-    this.#open = open
-    for (const listener of this.#listeners) listener()
-  }
 }
 
 type HeaderProps = PropsRuntime<"conversation.session.header.utilities"> & PropsLocale<typeof CONNECTIONS_NS>
-type OverlayProps = PropsRuntime<"shell.overlay"> & PropsLocale<typeof CONNECTIONS_NS>
+type DetailsProps = PropsRuntime<"details"> & PropsLocale<typeof CONNECTIONS_NS>
 
-export function createConnectionsComponents(connection: ConnectionHandle, controller: ConnectionsDrawerController) {
+export function createConnectionsComponents(
+  connection: ConnectionHandle,
+  controller: ConnectionsController,
+  layout: ILayout,
+) {
   function ConnectionsHeaderButton({ t }: HeaderProps) {
-    const open = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
     return (
       <button
         type="button"
         aria-label={t("title")}
-        aria-expanded={open}
-        style={{ ...styles.headerButton, ...(open ? styles.headerButtonActive : {}) }}
-        onClick={controller.toggle}
+        style={styles.headerButton}
+        onClick={() => { layout.openDetails() }}
       >
         <OomolMark size={17} />
         <span>{t("open")}</span>
@@ -334,23 +316,30 @@ export function createConnectionsComponents(connection: ConnectionHandle, contro
     )
   }
 
-  function ConnectionsOverlay({ t }: OverlayProps) {
-    const open = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
-    if (!open) return null
-    return <ConnectionsDrawer connection={connection} controller={controller} t={t} />
+  function ConnectionsDetails({ t }: DetailsProps) {
+    return (
+      <ConnectionsPanel
+        connection={connection}
+        controller={controller}
+        t={t}
+        onClose={() => { layout.closeDetails() }}
+      />
+    )
   }
 
-  return { ConnectionsHeaderButton, ConnectionsOverlay }
+  return { ConnectionsHeaderButton, ConnectionsDetails }
 }
 
-function ConnectionsDrawer({
+function ConnectionsPanel({
   connection,
   controller,
   t,
+  onClose,
 }: {
   connection: ConnectionHandle
-  controller: ConnectionsDrawerController
+  controller: ConnectionsController
   t: (key: ConnectionsLocaleKey, params?: Record<string, unknown>) => string
+  onClose: () => void
 }) {
   const initialListCache = controller.getListCache()
   const initialRepositoryCache = controller.getRepositoryCache()
@@ -465,102 +454,98 @@ function ConnectionsDrawer({
   const subtitle = t("subtitle", { count: providerCount })
 
   return (
-    <div style={styles.overlay} role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) controller.close()
-    }}>
-      <aside style={styles.drawer} role="dialog" aria-modal="true" aria-label={t("title")}>
-        <header style={styles.drawerHeader}>
-          <div style={styles.brandMark}><OomolMark size={34} /></div>
-          <div style={styles.headingCopy}>
-            <strong style={styles.drawerTitle}>{t("title")}</strong>
-            <span style={styles.drawerSubtitle} title={subtitle}>{subtitle}</span>
-          </div>
-          <button type="button" style={styles.iconButton} aria-label={t("refresh")} title={t("refresh")} onClick={() => { void refresh().catch(() => undefined) }}>
-            <RefreshIcon />
-          </button>
-          <button type="button" style={styles.iconButton} aria-label={t("close")} title={t("close")} onClick={controller.close}>
-            <CloseIcon />
-          </button>
-        </header>
+    <aside style={styles.panel} aria-label={t("title")}>
+      <header style={styles.panelHeader}>
+        <div style={styles.brandMark}><OomolMark size={34} /></div>
+        <div style={styles.headingCopy}>
+          <strong style={styles.panelTitle}>{t("title")}</strong>
+          <span style={styles.panelSubtitle} title={subtitle}>{subtitle}</span>
+        </div>
+        <button type="button" style={styles.iconButton} aria-label={t("refresh")} title={t("refresh")} onClick={() => { void refresh().catch(() => undefined) }}>
+          <RefreshIcon />
+        </button>
+        <button type="button" style={styles.iconButton} aria-label={t("close")} title={t("close")} onClick={onClose}>
+          <CloseIcon />
+        </button>
+      </header>
 
-        {selectedService ? (
-          <ProviderView
-            apps={appsByService.get(selectedService) ?? []}
-            call={call}
-            loading={detailLoading}
-            provider={provider}
-            t={t}
-            onBack={() => { setSelectedService(null); setError(null) }}
-            onRefresh={refresh}
-          />
-        ) : (
-          <div style={styles.drawerBody}>
-            <div style={styles.searchWrap}>
-              <span style={styles.searchIcon}><SearchIcon /></span>
-              <input
-                type="search"
-                value={query}
-                placeholder={t("search")}
-                aria-label={t("search")}
-                style={styles.searchInput}
-                onChange={(event) => setQuery(event.target.value)}
-              />
+      {selectedService ? (
+        <ProviderView
+          apps={appsByService.get(selectedService) ?? []}
+          call={call}
+          loading={detailLoading}
+          provider={provider}
+          t={t}
+          onBack={() => { setSelectedService(null); setError(null) }}
+          onRefresh={refresh}
+        />
+      ) : (
+        <div style={styles.panelBody}>
+          <div style={styles.searchWrap}>
+            <span style={styles.searchIcon}><SearchIcon /></span>
+            <input
+              type="search"
+              value={query}
+              placeholder={t("search")}
+              aria-label={t("search")}
+              style={styles.searchInput}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+          {loading ? <StatePanel>{t("loading")}</StatePanel> : null}
+          {!loading && error ? <ErrorPanel error={error} t={t} retry={() => refresh()} /> : null}
+          {!loading && !error && visibleProviders.length === 0 ? <StatePanel>{t("empty")}</StatePanel> : null}
+          {!loading && !error ? (
+            <div style={styles.providerList}>
+              {visibleProviders.map((item) => {
+                const apps = appsByService.get(item.service) ?? []
+                const needsAttention = apps.some((app) => app.status !== "active")
+                return (
+                  <button key={item.service} type="button" style={styles.providerRow} onClick={() => {
+                    setProvider(controller.getProviderCache(item.service)?.value ?? null)
+                    setSelectedService(item.service)
+                  }}>
+                    <ProviderIcon provider={item} />
+                    <span style={styles.providerCopy}>
+                      <strong style={styles.providerName}>{item.displayName}</strong>
+                      <span style={styles.providerMeta}>{authTypeLabels(item.authTypes, t)}</span>
+                    </span>
+                    <span style={needsAttention ? styles.statusWarning : apps.length ? styles.statusConnected : styles.statusIdle}>
+                      {needsAttention ? t("needsAttention") : apps.length ? `${t("connected")} · ${apps.length}` : t("notConnected")}
+                    </span>
+                    <span style={styles.chevron}>›</span>
+                  </button>
+                )
+              })}
             </div>
-            {loading ? <StatePanel>{t("loading")}</StatePanel> : null}
-            {!loading && error ? <ErrorPanel error={error} t={t} retry={() => refresh()} /> : null}
-            {!loading && !error && visibleProviders.length === 0 ? <StatePanel>{t("empty")}</StatePanel> : null}
-            {!loading && !error ? (
-              <div style={styles.providerList}>
-                {visibleProviders.map((item) => {
-                  const apps = appsByService.get(item.service) ?? []
-                  const needsAttention = apps.some((app) => app.status !== "active")
-                  return (
-                    <button key={item.service} type="button" style={styles.providerRow} onClick={() => {
-                      setProvider(controller.getProviderCache(item.service)?.value ?? null)
-                      setSelectedService(item.service)
-                    }}>
-                      <ProviderIcon provider={item} />
-                      <span style={styles.providerCopy}>
-                        <strong style={styles.providerName}>{item.displayName}</strong>
-                        <span style={styles.providerMeta}>{authTypeLabels(item.authTypes, t)}</span>
-                      </span>
-                      <span style={needsAttention ? styles.statusWarning : apps.length ? styles.statusConnected : styles.statusIdle}>
-                        {needsAttention ? t("needsAttention") : apps.length ? `${t("connected")} · ${apps.length}` : t("notConnected")}
-                      </span>
-                      <span style={styles.chevron}>›</span>
-                    </button>
-                  )
-                })}
-              </div>
-            ) : null}
-          </div>
-        )}
+          ) : null}
+        </div>
+      )}
 
-        <footer style={styles.drawerFooter}>
-          <span style={styles.footerProduct}>{t("poweredBy")}</span>
-          <a
-            href={repository.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t("viewOnGitHub")}
-            title={t("viewOnGitHub")}
-            style={styles.githubLink}
+      <footer style={styles.panelFooter}>
+        <span style={styles.footerProduct}>{t("poweredBy")}</span>
+        <a
+          href={repository.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t("viewOnGitHub")}
+          title={t("viewOnGitHub")}
+          style={styles.githubLink}
+        >
+          <GitHubMark />
+          <span style={styles.githubRepoName}>GitHub</span>
+          <span
+            style={styles.starTag}
+            title={`${repository.stars} ${t("githubStars")}`}
+            aria-label={`${repository.stars} ${t("githubStars")}`}
           >
-            <GitHubMark />
-            <span style={styles.githubRepoName}>GitHub</span>
-            <span
-              style={styles.starTag}
-              title={`${repository.stars} ${t("githubStars")}`}
-              aria-label={`${repository.stars} ${t("githubStars")}`}
-            >
-              <span aria-hidden="true">★</span>
-              <span>{repository.stars}</span>
-            </span>
-            <span aria-hidden="true">↗</span>
-          </a>
-        </footer>
-      </aside>
-    </div>
+            <span aria-hidden="true">★</span>
+            <span>{repository.stars}</span>
+          </span>
+          <span aria-hidden="true">↗</span>
+        </a>
+      </footer>
+    </aside>
   )
 }
 
@@ -602,7 +587,7 @@ function ProviderView({
   }
 
   return (
-    <div style={styles.drawerBody}>
+    <div style={styles.panelBody}>
       <button type="button" style={styles.backButton} onClick={onBack}>← {t("back")}</button>
       {loading || !provider ? <StatePanel>{t("loading")}</StatePanel> : (
         <>
@@ -1006,17 +991,15 @@ const businessSurface = "var(--dsw-alias-state-business-tertiary, #e8efff)"
 
 const styles: Record<string, CSSProperties> = {
   headerButton: { border, minWidth: 104, height: 32, color: "var(--dsw-alias-label-primary, inherit)", cursor: "pointer", background: "transparent", borderRadius: 18, display: "inline-flex", justifyContent: "center", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 13, fontFamily: "inherit" },
-  headerButtonActive: { background: "var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.14))", borderColor: "var(--dsw-alias-border-l3, rgba(127,127,127,.35))" },
-  overlay: { position: "absolute", inset: 0, display: "flex", justifyContent: "flex-end", background: "var(--dsw-alias-bg-mask-1, rgba(0,0,0,.38))", backdropFilter: "var(--dsw-mask-blur, blur(2px))", pointerEvents: "auto" },
-  drawer: { width: "min(560px, calc(100vw - 42px))", height: "100%", background: surface, color: primary, colorScheme: "inherit", borderLeft: border, boxShadow: "var(--dsw-shadow-lv3, -18px 0 48px rgba(0,0,0,.18))", display: "flex", flexDirection: "column", fontFamily: "var(--dsw-font-family, ui-sans-serif, system-ui)", overflow: "hidden" },
-  drawerHeader: { minHeight: 0, padding: "10px 16px", borderBottom: border, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 },
+  panel: { width: "100%", height: "100%", background: surface, color: primary, colorScheme: "inherit", display: "flex", flexDirection: "column", fontFamily: "var(--dsw-font-family, ui-sans-serif, system-ui)", overflow: "hidden" },
+  panelHeader: { minHeight: 0, padding: "10px 16px", borderBottom: border, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 },
   brandMark: { width: 34, height: 34, display: "grid", placeItems: "center", flexShrink: 0 },
   headingCopy: { minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 3 },
-  drawerTitle: { fontSize: 15, lineHeight: "20px" },
-  drawerSubtitle: { fontSize: 12, lineHeight: "16px", color: muted, overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 },
+  panelTitle: { fontSize: 15, lineHeight: "20px" },
+  panelSubtitle: { fontSize: 12, lineHeight: "16px", color: muted, overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 },
   iconButton: { width: 34, height: 34, flexShrink: 0, display: "grid", placeItems: "center", padding: 0, border, borderRadius: 9, color: "inherit", background: "transparent", cursor: "pointer", lineHeight: 0 },
-  drawerBody: { flex: 1, minHeight: 0, overflowY: "auto", padding: 16 },
-  drawerFooter: { minHeight: 42, flexShrink: 0, borderTop: border, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: surface, fontSize: 11 },
+  panelBody: { flex: 1, minHeight: 0, overflowY: "auto", padding: 16 },
+  panelFooter: { minHeight: 42, flexShrink: 0, borderTop: border, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: surface, fontSize: 11 },
   footerProduct: { color: tertiary },
   githubLink: { minWidth: 0, minHeight: 28, display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 7, padding: "0 6px", color: muted, textDecoration: "none", fontWeight: 500 },
   githubRepoName: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "underline", textUnderlineOffset: 3 },

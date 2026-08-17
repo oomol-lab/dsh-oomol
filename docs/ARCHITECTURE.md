@@ -17,7 +17,7 @@ The Host plugin remains active while the credential is absent. Its browser half 
 
 Connection testing checks Connector authorization and Provider-catalog access. The official DeepSeek Harness MCP client remains the sole runtime MCP bridge and owns initialization, discovery, tool registration, and reconnect behavior. A loopback-only `/oomol` RPC channel returns sanitized connection state; raw remote errors and request headers never cross into the browser.
 
-The same loopback-only channel provides a small Connections BFF for the native right-side drawer. The browser receives a sanitized Provider catalog and connection metadata. The Host resolves the permanent MCP key and calls fixed OOMOL Connector REST routes; the permanent key never enters browser state or a URL. OAuth uses the existing Console callback in a popup and the drawer detects completion by polling sanitized connection metadata, so this flow does not require Console changes.
+The same loopback-only channel provides a small Connections BFF for the native right-side details panel. The panel occupies Harness's official `details` slot and opens or closes only through `ctx.layout`; Harness owns its geometry and responsive behavior. The browser receives a sanitized Provider catalog and connection metadata. The Host resolves the permanent MCP key and calls fixed OOMOL Connector REST routes; the permanent key never enters browser state or a URL. OAuth uses the existing Console callback in a popup and the panel detects completion by polling sanitized connection metadata, so this flow does not require Console changes.
 
 ## Responsibilities
 
@@ -37,7 +37,7 @@ The same loopback-only channel provides a small Connections BFF for the native r
 - Web settings card for write-only key configuration
 - Credential-change-driven MCP client reload
 - Credential-safe connection health and explicit test-connection flow
-- Native Connections drawer and credential-fenced Connector REST bridge
+- Native Connections details panel and credential-fenced Connector REST bridge
 - Future pairing and approval presentation
 
 ### OOMOL Connector
@@ -57,7 +57,7 @@ The same loopback-only channel provides a small Connections BFF for the native r
 
 ## Credential boundary
 
-Provider secrets are never persisted by this plugin. API keys or custom credentials entered in the drawer make one loopback-fenced request to the Host, which forwards them to a fixed OOMOL Connector endpoint and discards them after the request. Provider tokens and stored credentials remain in OOMOL Connector and are never returned to the browser.
+Provider secrets are never persisted by this plugin. API keys or custom credentials entered in the details panel make one loopback-fenced request to the Host, which forwards them to a fixed OOMOL Connector endpoint and discards them after the request. Provider tokens and stored credentials remain in OOMOL Connector and are never returned to the browser.
 
 The plugin resolves one OOMOL MCP client key from the Harness credentials service or launching environment. The Host uses it for MCP Authorization and for the Connections BFF, but never returns it to browser code or places it in a URL. A missing key is an unconfigured state rather than a Host startup error, which keeps the settings surface available after first install.
 
