@@ -206,6 +206,7 @@ export function apply(ctx: ClientContext): void {
       try {
         const response = await api.credentials.set({ ref: API_KEY_REF, value })
         if (!response.result.ok) throw new Error(response.result.error.message)
+        drawer.clearCache()
         setDraft("")
         setMessage("saved")
         await refresh()
@@ -224,6 +225,7 @@ export function apply(ctx: ClientContext): void {
       try {
         const response = await api.credentials.unset({ ref: API_KEY_REF })
         if (!response.result.ok) throw new Error(response.result.error.message)
+        drawer.clearCache()
         setDraft("")
         setMessage("removed")
         await refresh()
@@ -267,7 +269,12 @@ export function apply(ctx: ClientContext): void {
           {t("connectionStatus", { status: t(localeKeyForPhase(connector.phase)) })}
         </p>
         {connector.toolCount !== undefined ? <p style={styles.hint}>{t("toolCount", { count: connector.toolCount })}</p> : null}
-        {connector.checkedAt ? <p style={styles.hint}>{t("lastChecked", { time: new Date(connector.checkedAt).toLocaleString() })}</p> : null}
+        {connector.checkedAt ? <p style={styles.hint}>{t("lastChecked", {
+          time: new Intl.DateTimeFormat(ctx.locale.getLocale().active === "zh" ? "zh-CN" : "en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }).format(new Date(connector.checkedAt)),
+        })}</p> : null}
         {message ? <p role="status" style={message === "failed" ? styles.error : styles.success}>{t(message)}</p> : null}
 
         <div style={styles.actions}>

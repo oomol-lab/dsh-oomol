@@ -6,8 +6,8 @@ Use apps and services connected through OOMOL directly from DeepSeek Harness.
 
 [npm package](https://www.npmjs.com/package/dsh-oomol) · [中文文档](./docs/README.zh-CN.md)
 
-> [!IMPORTANT]
-> This project is a developer preview tested with DeepSeek Harness `0.1.0-rc.6`. DeepSeek Harness is evolving quickly, so test compatibility before upgrading either package.
+> [!NOTE]
+> This plugin uses DeepSeek Harness's official bundle, client-slot, credentials, and MCP-client standards. It does not patch Harness source code.
 
 ## What you can do
 
@@ -208,7 +208,7 @@ Do not place the API key itself in `cordis.patch.yml`. Runtime credential resolu
 | Connection state is **Unauthorized** | The OOMOL MCP key is invalid, expired, or revoked | Create a dedicated replacement key and save it again |
 | Connection succeeds but the expected app is missing | The Provider is not connected, or the selected team identity is wrong | Check [OOMOL connections](https://console.oomol.com/connections) and `OOMOL_TEAM_NAME` |
 | A launch-environment key cannot be changed in Settings | Environment credentials are read-only in the browser | Change `OOMOL_MCP_API_KEY` where Harness is launched and restart it |
-| A newer Harness release fails to boot | A Developer Preview API changed | Return to the tested compatibility version and open an issue with the failing versions |
+| The plugin fails after an upgrade | Installed Harness and plugin dependencies are out of sync, or a compatibility regression occurred | Update `dsh-oomol`, restart Harness, and open an issue with both installed versions if the problem remains |
 
 The local environment doctor reports readiness without printing credential values:
 

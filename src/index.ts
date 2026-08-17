@@ -7,6 +7,7 @@ import * as mcpClient from "@deepseek-ai/dsh-mcp-client"
 import Schema from "@deepseek-ai/schemastery"
 
 import { createConnectionsRpcHandler } from "./connections.js"
+import { createRepositoryRpcHandler } from "./repository.js"
 import {
   probeOomolConnection,
   statusFromProbeError,
@@ -79,10 +80,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
 
   const handleConnectionsRpc = createConnectionsRpcHandler({ resolveConnection })
+  const handleRepositoryRpc = createRepositoryRpcHandler()
 
   ctx.connection.rpc.handle("/oomol", async (endpoint, payload, signal) => {
     if (endpoint === "status") return { ok: true, value: status }
     if (endpoint === "test") return { ok: true, value: await testConnection() }
+    if (endpoint.startsWith("repository/")) return handleRepositoryRpc(endpoint, signal)
     if (endpoint.startsWith("connections/")) return handleConnectionsRpc(endpoint, payload, signal)
     return {
       ok: false,

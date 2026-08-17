@@ -8,7 +8,7 @@ Gmail、Slack、Notion、GitHub 等 Provider 的 OAuth Token 和 API Key 继续�
 
 ## 当前状态
 
-这是一个经过隔离 profile 安装和 Web 启动验证的 Host + Web Plugin，兼容基线为 DeepSeek Harness `0.1.0-rc.6`。DeepSeek Harness 仍处于 Developer Preview，正式发布前需要持续验证新版本兼容性。
+这是一个遵循 DeepSeek Harness 官方 Bundle、Client Slot、Credentials 和 MCP Client 标准的 Host + Web Plugin，不修改 Harness 源码。项目通过隔离 Profile 安装、Web 启动和自动化测试验证发布质量。
 
 当前版本包含：
 

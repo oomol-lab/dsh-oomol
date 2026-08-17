@@ -44,7 +44,7 @@
   },
   "dshCompat": {
     "anchorVersion": "0.1.0-rc.6",
-    "note": "Initial compatibility anchor. DeepSeek Harness is in developer preview; CI and smoke tests must verify newer releases."
+    "note": "Uses official DeepSeek Harness plugin APIs. This value records the CI test baseline and is not a hard runtime pin."
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.client.json && tsdown",

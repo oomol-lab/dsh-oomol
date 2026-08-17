@@ -14,6 +14,7 @@ import {
   type ReactNode,
 } from "react"
 import { createPortal } from "react-dom"
+import { TimedMemoryCache } from "./connections-cache.js"
 
 export const CONNECTIONS_NS = "oomol.connections"
 
@@ -54,9 +55,20 @@ type ConnectionsLocaleKey =
   | "configureFirst"
   | "tryAgain"
   | "openConsole"
-  | "preview"
-  | "secureHint"
+  | "viewOnGitHub"
+  | "poweredBy"
+  | "githubStars"
   | "unsupported"
+  | "disconnectConfirm"
+  | "errorCancelled"
+  | "errorUnavailable"
+  | "errorUnauthorized"
+  | "errorRateLimited"
+  | "errorRequestFailed"
+  | "errorInvalidResponse"
+  | "errorInvalidRequest"
+  | "errorNotFound"
+  | "errorUnknown"
 
 declare module "@deepseek-ai/dsh-client-ui-slots" {
   interface LocaleNamespaceMap {
@@ -67,7 +79,7 @@ declare module "@deepseek-ai/dsh-client-ui-slots" {
 export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   open: "Connections",
   title: "OOMOL Connections",
-  subtitle: "Connect apps without leaving DeepSeek Harness.",
+  subtitle: "{count} apps. Every connection your agents need.",
   close: "Close",
   refresh: "Refresh",
   search: "Search apps",
@@ -99,15 +111,26 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   configureFirst: "Configure and test an OOMOL MCP key in Settings first.",
   tryAgain: "Try again",
   openConsole: "Open full Console",
-  preview: "Preview",
-  secureHint: "Your OOMOL MCP key stays in the Harness Host and is never sent to this page.",
-  unsupported: "This authentication method is not available in the preview.",
+  viewOnGitHub: "View open-connector on GitHub",
+  poweredBy: "Powered by Open Connector",
+  githubStars: "GitHub stars",
+  unsupported: "This authentication method is not available here yet.",
+  disconnectConfirm: "Disconnect {account}?",
+  errorCancelled: "The request was cancelled.",
+  errorUnavailable: "OOMOL Connections is temporarily unavailable. Try again later.",
+  errorUnauthorized: "The OOMOL MCP key is invalid or does not have access.",
+  errorRateLimited: "Too many requests. Wait a moment and try again.",
+  errorRequestFailed: "OOMOL could not complete the request.",
+  errorInvalidResponse: "OOMOL returned an unexpected response.",
+  errorInvalidRequest: "The connection request is invalid. Check the fields and try again.",
+  errorNotFound: "The requested connection operation was not found.",
+  errorUnknown: "The operation failed. Try again.",
 }
 
 export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   open: "连接",
   title: "OOMOL 连接中心",
-  subtitle: "无需离开 DeepSeek Harness，即可连接应用。",
+  subtitle: "{count} 第三方应用，你想要的连接，应有尽有。",
   close: "关闭",
   refresh: "刷新",
   search: "搜索应用",
@@ -139,9 +162,20 @@ export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   configureFirst: "请先在设置中配置并测试 OOMOL MCP Key。",
   tryAgain: "重试",
   openConsole: "打开完整控制台",
-  preview: "预览版",
-  secureHint: "OOMOL MCP Key 始终保留在 Harness Host 中，不会发送到这个页面。",
-  unsupported: "预览版暂不支持这种认证方式。",
+  viewOnGitHub: "在 GitHub 上查看 open-connector",
+  poweredBy: "Powered by Open Connector",
+  githubStars: "GitHub Star 数",
+  unsupported: "当前暂不支持这种认证方式。",
+  disconnectConfirm: "确定要断开 {account} 的连接吗？",
+  errorCancelled: "请求已取消。",
+  errorUnavailable: "OOMOL 连接服务暂时不可用，请稍后重试。",
+  errorUnauthorized: "OOMOL MCP Key 无效或没有访问权限。",
+  errorRateLimited: "请求过于频繁，请稍后重试。",
+  errorRequestFailed: "OOMOL 暂时无法完成这个请求。",
+  errorInvalidResponse: "OOMOL 返回了无法识别的数据。",
+  errorInvalidRequest: "连接请求无效，请检查填写内容后重试。",
+  errorNotFound: "没有找到请求的连接操作。",
+  errorUnknown: "操作失败，请重试。",
 }
 
 interface ProviderListItem {
@@ -208,9 +242,28 @@ interface ConnectResult {
   app?: ConnectedApp
 }
 
+interface RepositoryStatus {
+  owner: string
+  name: string
+  url: string
+  stars: string
+}
+
+const CONNECTIONS_CACHE_FRESH_MS = 60_000
+const REPOSITORY_CACHE_FRESH_MS = 60 * 60_000
+const OPEN_CONNECTOR_FALLBACK: RepositoryStatus = {
+  owner: "oomol-lab",
+  name: "open-connector",
+  url: "https://github.com/oomol-lab/open-connector",
+  stars: "4.7k",
+}
+
 export class ConnectionsDrawerController {
   #open = false
   #listeners = new Set<() => void>()
+  #listCache = new TimedMemoryCache<"list", ConnectionsList>(CONNECTIONS_CACHE_FRESH_MS)
+  #providerCache = new TimedMemoryCache<string, ProviderDetail>(CONNECTIONS_CACHE_FRESH_MS)
+  #repositoryCache = new TimedMemoryCache<"open-connector", RepositoryStatus>(REPOSITORY_CACHE_FRESH_MS)
 
   subscribe = (listener: () => void) => {
     this.#listeners.add(listener)
@@ -222,6 +275,35 @@ export class ConnectionsDrawerController {
   open = () => this.set(true)
   close = () => this.set(false)
   toggle = () => this.set(!this.#open)
+
+  getListCache = () => this.#listCache.get("list")
+
+  setListCache = (value: ConnectionsList) => {
+    this.#listCache.set("list", value)
+  }
+
+  isListCacheFresh = () => this.#listCache.isFresh("list")
+
+  getProviderCache = (service: string) => this.#providerCache.get(service)
+
+  setProviderCache = (service: string, value: ProviderDetail) => {
+    this.#providerCache.set(service, value)
+  }
+
+  isProviderCacheFresh = (service: string) => this.#providerCache.isFresh(service)
+
+  getRepositoryCache = () => this.#repositoryCache.get("open-connector")
+
+  setRepositoryCache = (value: RepositoryStatus) => {
+    this.#repositoryCache.set("open-connector", value)
+  }
+
+  isRepositoryCacheFresh = () => this.#repositoryCache.isFresh("open-connector")
+
+  clearCache = () => {
+    this.#listCache.clear()
+    this.#providerCache.clear()
+  }
 
   private set(open: boolean) {
     if (this.#open === open) return
@@ -271,23 +353,25 @@ function ConnectionsDrawer({
   controller: ConnectionsDrawerController
   t: (key: ConnectionsLocaleKey, params?: Record<string, unknown>) => string
 }) {
-  const [data, setData] = useState<ConnectionsList | null>(null)
+  const initialListCache = controller.getListCache()
+  const initialRepositoryCache = controller.getRepositoryCache()
+  const [data, setData] = useState<ConnectionsList | null>(() => initialListCache?.value ?? null)
+  const [repository, setRepository] = useState<RepositoryStatus>(() => initialRepositoryCache?.value ?? OPEN_CONNECTOR_FALLBACK)
   const [selectedService, setSelectedService] = useState<string | null>(null)
   const [provider, setProvider] = useState<ProviderDetail | null>(null)
   const [query, setQuery] = useState("")
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => initialListCache === undefined)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const alive = useRef(true)
+  const hasListData = useRef(initialListCache !== undefined)
 
   useEffect(() => () => { alive.current = false }, [])
 
   const call = useCallback(async <T,>(endpoint: string, payload: unknown): Promise<T> => {
     const response = await connection.rpc.call("/oomol", endpoint, payload)
     if (!response.ok) {
-      const code = (response.error as { code?: string }).code
-      const unconfigured = code === "unconfigured" || response.error.message === "Configure an OOMOL MCP key first."
-      throw new Error(unconfigured ? t("configureFirst") : response.error.message)
+      throw new Error(t(localeKeyForConnectionsError(response.error)))
     }
     return response.value as T
   }, [connection, t])
@@ -297,32 +381,61 @@ function ConnectionsDrawer({
     setError(null)
     try {
       const next = await call<ConnectionsList>("connections/list", {})
+      controller.setListCache(next)
+      hasListData.current = true
       if (alive.current) setData(next)
       return next
     } catch (caught) {
-      if (alive.current) setError(caught instanceof Error ? caught.message : String(caught))
+      if (alive.current && (!quiet || !hasListData.current)) {
+        setError(caught instanceof Error ? caught.message : String(caught))
+      }
       throw caught
     } finally {
       if (alive.current && !quiet) setLoading(false)
     }
-  }, [call])
+  }, [call, controller])
 
-  useEffect(() => { void refresh().catch(() => undefined) }, [refresh])
+  useEffect(() => {
+    const cached = controller.getListCache()
+    if (cached && controller.isListCacheFresh()) return
+    void refresh(cached !== undefined).catch(() => undefined)
+  }, [controller, refresh])
+
+  useEffect(() => {
+    if (controller.isRepositoryCacheFresh()) return
+    void call<RepositoryStatus>("repository/open-connector", {})
+      .then((next) => {
+        controller.setRepositoryCache(next)
+        if (alive.current) setRepository(next)
+      })
+      .catch(() => undefined)
+  }, [call, controller])
 
   useEffect(() => {
     if (!selectedService) {
       setProvider(null)
       return
     }
+    const cached = controller.getProviderCache(selectedService)
+    setProvider(cached?.value ?? null)
+    if (cached && controller.isProviderCacheFresh(selectedService)) {
+      setDetailLoading(false)
+      return
+    }
     let active = true
-    setDetailLoading(true)
+    setDetailLoading(cached === undefined)
     setError(null)
     void call<ProviderDetail>("connections/provider", { service: selectedService })
-      .then((next) => { if (active) setProvider(next) })
-      .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : String(caught)) })
+      .then((next) => {
+        controller.setProviderCache(selectedService, next)
+        if (active) setProvider(next)
+      })
+      .catch((caught) => {
+        if (active && cached === undefined) setError(caught instanceof Error ? caught.message : String(caught))
+      })
       .finally(() => { if (active) setDetailLoading(false) })
     return () => { active = false }
-  }, [call, selectedService])
+  }, [call, controller, selectedService])
 
   const appsByService = useMemo(() => {
     const grouped = new Map<string, ConnectedApp[]>()
@@ -349,6 +462,8 @@ function ConnectionsDrawer({
         .includes(normalized),
     )
   }, [appsByService, data, query])
+  const providerCount = data ? data.providers.length.toLocaleString("en-US") : "1,300+"
+  const subtitle = t("subtitle", { count: providerCount })
 
   return (
     <div style={styles.overlay} role="presentation" onMouseDown={(event) => {
@@ -356,23 +471,18 @@ function ConnectionsDrawer({
     }}>
       <aside style={styles.drawer} role="dialog" aria-modal="true" aria-label={t("title")}>
         <header style={styles.drawerHeader}>
-          <div style={styles.brandMark}><OomolMark size={38} /></div>
+          <div style={styles.brandMark}><OomolMark size={34} /></div>
           <div style={styles.headingCopy}>
-            <div style={styles.headingRow}>
-              <strong style={styles.drawerTitle}>{t("title")}</strong>
-              <span style={styles.previewBadge}>{t("preview")}</span>
-            </div>
-            <span style={styles.drawerSubtitle}>{t("subtitle")}</span>
+            <strong style={styles.drawerTitle}>{t("title")}</strong>
+            <span style={styles.drawerSubtitle} title={subtitle}>{subtitle}</span>
           </div>
           <button type="button" style={styles.iconButton} aria-label={t("refresh")} title={t("refresh")} onClick={() => { void refresh().catch(() => undefined) }}>
-            ↻
+            <RefreshIcon />
           </button>
           <button type="button" style={styles.iconButton} aria-label={t("close")} title={t("close")} onClick={controller.close}>
-            ×
+            <CloseIcon />
           </button>
         </header>
-
-        <div style={styles.securityBar}><span>●</span>{t("secureHint")}</div>
 
         {selectedService ? (
           <ProviderView
@@ -387,7 +497,7 @@ function ConnectionsDrawer({
         ) : (
           <div style={styles.drawerBody}>
             <div style={styles.searchWrap}>
-              <span style={styles.searchIcon}>⌕</span>
+              <span style={styles.searchIcon}><SearchIcon /></span>
               <input
                 type="search"
                 value={query}
@@ -406,7 +516,10 @@ function ConnectionsDrawer({
                   const apps = appsByService.get(item.service) ?? []
                   const needsAttention = apps.some((app) => app.status !== "active")
                   return (
-                    <button key={item.service} type="button" style={styles.providerRow} onClick={() => setSelectedService(item.service)}>
+                    <button key={item.service} type="button" style={styles.providerRow} onClick={() => {
+                      setProvider(controller.getProviderCache(item.service)?.value ?? null)
+                      setSelectedService(item.service)
+                    }}>
                       <ProviderIcon provider={item} />
                       <span style={styles.providerCopy}>
                         <strong style={styles.providerName}>{item.displayName}</strong>
@@ -423,6 +536,30 @@ function ConnectionsDrawer({
             ) : null}
           </div>
         )}
+
+        <footer style={styles.drawerFooter}>
+          <span style={styles.footerProduct}>{t("poweredBy")}</span>
+          <a
+            href={repository.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t("viewOnGitHub")}
+            title={t("viewOnGitHub")}
+            style={styles.githubLink}
+          >
+            <GitHubMark />
+            <span style={styles.githubRepoName}>GitHub</span>
+            <span
+              style={styles.starTag}
+              title={`${repository.stars} ${t("githubStars")}`}
+              aria-label={`${repository.stars} ${t("githubStars")}`}
+            >
+              <span aria-hidden="true">★</span>
+              <span>{repository.stars}</span>
+            </span>
+            <span aria-hidden="true">↗</span>
+          </a>
+        </footer>
       </aside>
     </div>
   )
@@ -450,7 +587,8 @@ function ProviderView({
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
 
   const disconnect = async (app: ConnectedApp) => {
-    if (!window.confirm(`${t("disconnect")} ${app.accountLabel || app.alias || app.displayName}?`)) return
+    const account = app.accountLabel || app.alias || app.displayName
+    if (!window.confirm(t("disconnectConfirm", { account }))) return
     setDisconnecting(app.id)
     setError(null)
     try {
@@ -723,7 +861,18 @@ function ProviderIcon({ provider, large = false }: { provider: ProviderListItem;
   const size = large ? 52 : 40
   const [failed, setFailed] = useState(false)
   if (provider.iconUrl && !failed) {
-    return <img src={provider.iconUrl} alt="" width={size} height={size} style={{ ...styles.providerIcon, width: size, height: size }} onError={() => setFailed(true)} />
+    return (
+      <img
+        src={provider.iconUrl}
+        alt=""
+        width={size}
+        height={size}
+        loading={large ? "eager" : "lazy"}
+        decoding="async"
+        style={{ ...styles.providerIcon, width: size, height: size }}
+        onError={() => setFailed(true)}
+      />
+    )
   }
   return <span style={{ ...styles.providerIcon, ...styles.providerIconFallback, width: size, height: size }}>{provider.displayName.slice(0, 1).toUpperCase()}</span>
 }
@@ -753,6 +902,25 @@ function authTypeLabel(type: AuthType, t: (key: ConnectionsLocaleKey) => string)
   return t("noAuth")
 }
 
+function localeKeyForConnectionsError(error: unknown): ConnectionsLocaleKey {
+  if (typeof error !== "object" || error === null) return "errorUnknown"
+  const details = "details" in error && typeof error.details === "object" && error.details !== null
+    ? error.details as Record<string, unknown>
+    : undefined
+  const reason = typeof details?.reason === "string" ? details.reason : undefined
+  if (reason === "unconfigured") return "configureFirst"
+  if (reason === "cancelled") return "errorCancelled"
+  if (reason === "unavailable") return "errorUnavailable"
+  if (reason === "unauthorized") return "errorUnauthorized"
+  if (reason === "rate_limited") return "errorRateLimited"
+  if (reason === "request_failed") return "errorRequestFailed"
+  if (reason === "invalid_response") return "errorInvalidResponse"
+  if (reason === "invalid_request") return "errorInvalidRequest"
+  if (reason === "unsupported") return "unsupported"
+  if (reason === "not_found") return "errorNotFound"
+  return "errorUnknown"
+}
+
 function OomolMark({ size }: { size: number }) {
   return (
     <svg
@@ -767,6 +935,40 @@ function OomolMark({ size }: { size: number }) {
       <path fill="currentColor" d="M71.5654 62.0342C73.4795 62.0342 75.032 63.582 75.0322 65.4912C75.0322 67.4006 73.4796 68.9492 71.5654 68.9492C69.6514 68.949 68.0996 67.4004 68.0996 65.4912C68.0998 63.5822 69.6516 62.0344 71.5654 62.0342Z" />
       <path fill="currentColor" d="M28.4346 31.3037C30.3485 31.3039 31.9002 32.8517 31.9004 34.7607C31.9004 36.6699 30.3486 38.2175 28.4346 38.2178C26.5204 38.2178 24.9678 36.6701 24.9678 34.7607C24.9679 32.8515 26.5205 31.3037 28.4346 31.3037Z" />
       <path fill="currentColor" fillRule="evenodd" clipRule="evenodd" d="M50 0C77.6142 4.12327e-06 100 22.3858 100 50C100 77.6142 77.6142 100 50 100C22.3858 100 4.1238e-06 77.6142 0 50C0 22.3858 22.3858 0 50 0ZM28.4346 25.9258C23.5429 25.9258 19.5773 29.8814 19.5771 34.7607C19.5771 39.6402 23.5428 43.5957 28.4346 43.5957C32.3862 43.5955 35.7335 41.0146 36.874 37.4502H40.7578C44.3733 37.4504 47.3047 40.374 47.3047 43.9805V56.2725C47.3047 62.849 52.649 68.1805 59.2422 68.1807H63.126C64.2664 71.7451 67.6138 74.327 71.5654 74.3271C76.4572 74.3271 80.4229 70.3707 80.4229 65.4912C80.4226 60.6119 76.4571 56.6562 71.5654 56.6562C67.6138 56.6564 64.2664 59.2382 63.126 62.8027H59.2422C55.6267 62.8026 52.6953 59.8789 52.6953 56.2725V43.9805C52.6953 37.4039 47.351 32.0724 40.7578 32.0723H36.874C35.7336 28.5078 32.3862 25.926 28.4346 25.9258Z" />
+    </svg>
+  )
+}
+
+function GitHubMark() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" style={{ display: "block", flexShrink: 0 }}>
+      <path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.52-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.3-5.28-1.29-5.28-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.16 1.18a10.98 10.98 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.41-2.71 5.39-5.29 5.68.42.36.79 1.06.79 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z" />
+    </svg>
+  )
+}
+
+function RefreshIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
+      <path d="M20 6v5h-5" />
+      <path d="M19 11a7.5 7.5 0 1 0 .2 4" />
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ display: "block" }}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4 4" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ display: "block" }}>
+      <path d="m6 6 12 12M18 6 6 18" />
     </svg>
   )
 }
@@ -790,19 +992,21 @@ const styles: Record<string, CSSProperties> = {
   headerButtonActive: { background: "var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.14))", borderColor: "var(--dsw-alias-border-l3, rgba(127,127,127,.35))" },
   overlay: { position: "fixed", inset: 0, zIndex: 2147483000, display: "flex", justifyContent: "flex-end", background: "var(--dsw-alias-bg-mask-1, rgba(0,0,0,.38))", backdropFilter: "var(--dsw-mask-blur, blur(2px))", pointerEvents: "auto" },
   drawer: { width: "min(560px, calc(100vw - 42px))", height: "100%", background: surface, color: primary, colorScheme: "inherit", borderLeft: border, boxShadow: "var(--dsw-shadow-lv3, -18px 0 48px rgba(0,0,0,.18))", display: "flex", flexDirection: "column", fontFamily: "var(--dsw-font-family, ui-sans-serif, system-ui)", overflow: "hidden" },
-  drawerHeader: { minHeight: 72, padding: "14px 16px", borderBottom: border, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 },
-  brandMark: { width: 38, height: 38, display: "grid", placeItems: "center", flexShrink: 0 },
+  drawerHeader: { minHeight: 0, padding: "10px 16px", borderBottom: border, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 },
+  brandMark: { width: 34, height: 34, display: "grid", placeItems: "center", flexShrink: 0 },
   headingCopy: { minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 3 },
-  headingRow: { display: "flex", alignItems: "center", gap: 8 },
   drawerTitle: { fontSize: 15, lineHeight: "20px" },
-  drawerSubtitle: { fontSize: 12, color: muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  previewBadge: { fontSize: 10, lineHeight: "18px", padding: "0 7px", borderRadius: 999, background: businessSurface, color: business, border },
-  iconButton: { width: 34, height: 34, display: "grid", placeItems: "center", border, borderRadius: 9, color: "inherit", background: "transparent", cursor: "pointer", fontSize: 20 },
-  securityBar: { minHeight: 34, padding: "7px 16px", background: successSurface, borderBottom: "1px solid var(--dsw-alias-border-l1, rgba(38,49,72,.08))", color: success, display: "flex", alignItems: "center", gap: 8, fontSize: 11, flexShrink: 0 },
+  drawerSubtitle: { fontSize: 12, lineHeight: "16px", color: muted, overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 },
+  iconButton: { width: 34, height: 34, flexShrink: 0, display: "grid", placeItems: "center", padding: 0, border, borderRadius: 9, color: "inherit", background: "transparent", cursor: "pointer", lineHeight: 0 },
   drawerBody: { flex: 1, minHeight: 0, overflowY: "auto", padding: 16 },
+  drawerFooter: { minHeight: 42, flexShrink: 0, borderTop: border, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: surface, fontSize: 11 },
+  footerProduct: { color: tertiary },
+  githubLink: { minWidth: 0, minHeight: 28, display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 7, padding: "0 6px", color: muted, textDecoration: "none", fontWeight: 500 },
+  githubRepoName: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "underline", textUnderlineOffset: 3 },
+  starTag: { flexShrink: 0, minHeight: 20, display: "inline-flex", alignItems: "center", gap: 3, border, borderRadius: 999, padding: "0 6px", background: raised, color: primary, fontSize: 10, lineHeight: "18px", textDecoration: "none" },
   searchWrap: { position: "relative", marginBottom: 14 },
-  searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: tertiary, fontSize: 20, pointerEvents: "none" },
-  searchInput: { width: "100%", boxSizing: "border-box", height: 40, padding: "8px 12px 8px 38px", border, borderRadius: 10, background: raised, color: "inherit", outline: "none", font: "inherit" },
+  searchIcon: { position: "absolute", left: 12, top: "50%", width: 22, height: 22, transform: "translateY(-50%)", color: tertiary, pointerEvents: "none" },
+  searchInput: { width: "100%", boxSizing: "border-box", height: 40, padding: "8px 12px 8px 44px", border, borderRadius: 10, background: raised, color: "inherit", outline: "none", font: "inherit" },
   providerList: { border, borderRadius: 12, overflow: "hidden", background: raised },
   providerRow: { width: "100%", minHeight: 66, padding: "11px 12px", border: 0, borderBottom: border, background: "transparent", color: "inherit", display: "flex", alignItems: "center", gap: 11, textAlign: "left", cursor: "pointer", font: "inherit" },
   providerIcon: { flex: "0 0 auto", objectFit: "contain", borderRadius: 10, border, background: "white", padding: 5, boxSizing: "border-box" },
