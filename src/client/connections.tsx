@@ -380,11 +380,13 @@ export function createConnectionsComponents(
 
     useEffect(() => {
       let active = true
-      void connection.rpc.call("/oomol", "configuration", {}).then((response) => {
-        if (active && response.ok && isConnectorConfiguration(response.value)) {
-          setConfiguration(response.value)
-        }
-      })
+      void connection.rpc.call("/oomol", "configuration", {})
+        .then((response) => {
+          if (active && response.ok && isConnectorConfiguration(response.value)) {
+            setConfiguration(response.value)
+          }
+        })
+        .catch(() => undefined)
       return () => { active = false }
     }, [])
 

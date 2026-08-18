@@ -8,7 +8,7 @@ Use OOMOL Connector Actions from DeepSeek Harness through progressive MCP discov
 
 ## Requirements
 
-- Node.js 22.19 or later, or Node.js 24+
+- Node.js 22.19 or later within Node.js 22, or Node.js 24+
 - DeepSeek Harness
 - An OOMOL account for OOMOL Hosted, or a running OpenConnector instance for self-hosted use
 

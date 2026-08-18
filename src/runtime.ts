@@ -165,7 +165,7 @@ function comparableEndpoint(value: string): string {
 }
 
 function isLoopbackHostname(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+  return hostname === "localhost" || hostname.startsWith("127.") || hostname === "[::1]"
 }
 
 function nonEmpty(value: string | undefined): string | undefined {

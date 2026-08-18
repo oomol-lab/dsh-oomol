@@ -8,7 +8,7 @@
 
 ## 运行要求
 
-- Node.js 22.19 或更高版本，或 Node.js 24+
+- Node.js 22.19 或更高的 Node.js 22 版本，或 Node.js 24+
 - DeepSeek Harness
 - OOMOL Hosted 使用 OOMOL 账号；self-hosted 使用已运行的 OpenConnector
 

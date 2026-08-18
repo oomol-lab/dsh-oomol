@@ -12,9 +12,9 @@ const checks = [
     required: false,
   },
   {
-    detail: process.env.OOMOL_CONNECT_RUNTIME_TOKEN ? "configured in the launching environment" : "not set",
+    detail: process.env.OOMOL_CONNECT_RUNTIME_TOKEN?.trim() ? "default launch environment variable is set" : "not set",
     name: "OOMOL_CONNECT_RUNTIME_TOKEN",
-    ok: Boolean(process.env.OOMOL_CONNECT_RUNTIME_TOKEN),
+    ok: Boolean(process.env.OOMOL_CONNECT_RUNTIME_TOKEN?.trim()),
     required: false,
   },
 ]

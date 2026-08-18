@@ -121,6 +121,7 @@ describe("resolveOomolConnection", () => {
   it("restricts plain HTTP endpoints to loopback hosts", () => {
     expect(() => normalizeMcpEndpoint("http://connect.example.com/mcp")).toThrow("loopback")
     expect(normalizeMcpEndpoint("http://localhost:3006/mcp")).toBe("http://localhost:3006/mcp")
+    expect(normalizeMcpEndpoint("http://127.0.0.2:3006/mcp")).toBe("http://127.0.0.2:3006/mcp")
     expect(normalizeMcpEndpoint("http://[::1]:3006/mcp")).toBe("http://[::1]:3006/mcp")
   })
 
