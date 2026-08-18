@@ -4,6 +4,7 @@ import { credentialRef } from "@deepseek-ai/dsh-credentials"
 import type {} from "@deepseek-ai/dsh-credentials/types"
 import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment"
 import * as mcpClient from "@deepseek-ai/dsh-mcp-client"
+import { settingsNamespace } from "@deepseek-ai/dsh-settings"
 import Schema from "@deepseek-ai/schemastery"
 
 import { createConnectionsRpcHandler } from "./connections.js"
@@ -21,7 +22,7 @@ import {
 } from "./runtime.js"
 
 export const name = "oomol"
-export const inject = ["tools", "connection"]
+export const inject = ["tools", "connection", "settings"]
 
 export type Config = OomolConnectorConfig
 
@@ -36,6 +37,7 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 export async function apply(ctx: Context, config: Config): Promise<void> {
+  ctx.settings.register(settingsNamespace("oomol"), Config, { base: config, applies: "restart" })
   const launchEnvironment = launchEnvironmentOf(ctx)
   const initialConfiguration = resolveConnectorConfiguration(config)
   const apiKeyEnv = initialConfiguration.apiKeyEnv

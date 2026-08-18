@@ -153,6 +153,7 @@ Derived credential references:
 | Self-hosted returns Unauthorized | Save a runtime API key created by that OpenConnector instance |
 | Self-hosted Console link returns 404 | Open the Console URL configured by the OpenConnector deployment |
 | Expected app is missing | Open the relevant Connector Console and configure the Provider connection |
+| Connections panel stays closed | Widen the window to at least 1220 px so Harness can show its details column |
 
 Run local diagnostics:
 

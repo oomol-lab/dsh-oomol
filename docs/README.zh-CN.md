@@ -153,6 +153,7 @@ OOMOL Hosted 的 Provider credentials 保存在 OOMOL Connector。Self-hosted �
 | Self-hosted 返回未授权 | 保存该 OpenConnector 实例创建的 Runtime API Key |
 | Self-hosted Console 链接返回 404 | 打开 OpenConnector 部署所配置的 Console 地址 |
 | 缺少预期应用 | 在对应 Connector Console 中配置 Provider connection |
+| Connections 面板没有展开 | 将窗口放大到至少 1220 px，以便 Harness 显示详情栏 |
 
 运行本地诊断：
 

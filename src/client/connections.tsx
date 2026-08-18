@@ -27,6 +27,7 @@ type AuthType = "oauth2" | "api_key" | "custom_credential" | "federated" | "no_a
 
 type ConnectionsLocaleKey =
   | "open"
+  | "narrowViewportHint"
   | "title"
   | "subtitle"
   | "close"
@@ -101,6 +102,7 @@ declare module "@deepseek-ai/dsh-client-ui-slots" {
 
 export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   open: "Connections",
+  narrowViewportHint: "Manage Connector connections. Widen the window to open this panel.",
   title: "OOMOL Connections",
   subtitle: "{count} available apps",
   close: "Close",
@@ -170,6 +172,7 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
 
 export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   open: "连接",
+  narrowViewportHint: "管理 Connector 连接。放大窗口后可打开此面板。",
   title: "OOMOL 连接中心",
   subtitle: "{count} 个可用应用",
   close: "关闭",
@@ -389,6 +392,7 @@ export function createConnectionsComponents(
       <button
         type="button"
         aria-label={t("title")}
+        title={configuration?.connectionsManagement === "embedded" ? t("narrowViewportHint") : t("title")}
         disabled={!configuration}
         style={styles.headerButton}
         onClick={() => {
@@ -1246,7 +1250,7 @@ const business = "var(--dsw-alias-state-business-primary, #3964fe)"
 const businessSurface = "var(--dsw-alias-state-business-tertiary, #e8efff)"
 
 const styles: Record<string, CSSProperties> = {
-  headerButton: { border, minWidth: 104, height: 32, color: "var(--dsw-alias-label-primary, inherit)", cursor: "pointer", background: "transparent", borderRadius: 18, display: "inline-flex", justifyContent: "center", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 13, fontFamily: "inherit" },
+  headerButton: { border, height: 32, color: "var(--dsw-alias-label-primary, inherit)", cursor: "pointer", background: "transparent", borderRadius: 18, display: "inline-flex", flexShrink: 0, justifyContent: "center", alignItems: "center", gap: 6, padding: "6px 10px", whiteSpace: "nowrap", fontSize: 13, fontFamily: "inherit" },
   panel: { width: "100%", height: "100%", background: surface, color: primary, colorScheme: "inherit", display: "flex", flexDirection: "column", fontFamily: "var(--dsw-font-family, ui-sans-serif, system-ui)", overflow: "hidden" },
   panelHeader: { minHeight: 0, padding: "10px 16px", borderBottom: border, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
   headingCopy: { minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 3 },
