@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { statusFromConnectionReason } from "../src/health.js"
+import { statusFromConnectionReason, statusFromMcpError } from "../src/health.js"
 
 describe("statusFromConnectionReason", () => {
   const checkedAt = "2026-08-16T00:00:00.000Z"
@@ -32,5 +32,23 @@ describe("statusFromConnectionReason", () => {
       checkedAt,
       errorCode: "unavailable",
     })
+  })
+})
+
+describe("statusFromMcpError", () => {
+  const checkedAt = "2026-08-16T00:00:00.000Z"
+
+  it("maps structured HTTP status without returning remote error content", () => {
+    expect(statusFromMcpError({ response: { status: 401, body: "secret" } }, checkedAt)).toEqual({
+      phase: "unauthorized",
+      checkedAt,
+      errorCode: "unauthorized",
+    })
+    expect(statusFromMcpError({ status: 429 }, checkedAt)).toEqual({
+      phase: "rate-limited",
+      checkedAt,
+      errorCode: "rate-limited",
+    })
+    expect(statusFromMcpError({ code: 403 }, checkedAt).phase).toBe("unauthorized")
   })
 })

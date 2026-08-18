@@ -1,199 +1,186 @@
-# dsh-oomol
+# DeepSeek Harness 的 OOMOL Connector 插件
 
-[English](../README.md)
+通过渐进式 MCP 发现，在 DeepSeek Harness 中使用 OOMOL Connector Actions。
 
-这是面向 DeepSeek Harness 的 OOMOL Connector 插件：连接应用并调用 Actions。
+`dsh-oomol` 支持 OOMOL Hosted 和自行部署的 OpenConnector。一个插件实例连接一个 Connector endpoint。
 
-当前实现使用 DeepSeek Harness 官方 Streamable HTTP MCP Client，连接 OOMOL 的渐进式 Connector MCP Endpoint。Workflow 不属于当前版本的能力范围。
+[npm package](https://www.npmjs.com/package/dsh-oomol) | [English](../README.md)
 
-Gmail、Slack、Notion、GitHub 等 Provider 的 OAuth Token 和 API Key 继续保存在 OOMOL Connector 中；DeepSeek Harness 只持有一个专用、可撤销的 OOMOL MCP Client Key。
+## 运行要求
 
-## 视频教程
+- Node.js 22.19 或更高的 Node.js 22 版本，或 Node.js 24+
+- DeepSeek Harness
+- OOMOL Hosted 使用 OOMOL 账号；self-hosted 使用已运行的 OpenConnector
 
-[![在 DeepSeek Harness 中安装并使用 OOMOL Connector](./images/oomol-connector-video-tutorial.png)](https://youtu.be/lVrYJsW4kmo)
+## 安装
 
-这段 [YouTube 视频教程](https://youtu.be/lVrYJsW4kmo) 演示了完整流程：安装插件、获取 OOMOL MCP API Key、在 DeepSeek Harness 中完成配置、打开连接中心，以及在会话中使用已连接的应用。
-
-## 快速开始
-
-### 准备条件
-
-- Node.js `22.19` 或更高版本，或 Node.js `24+`；
-- DeepSeek Harness；
-- 一个 [OOMOL Console](https://console.oomol.com/) 账号。
-
-### 1. 安装插件
-
-推荐把下面这段提示词粘贴到具有终端权限的 DeepSeek Harness 会话中：
-
-```text
-请使用官方 dsh plugin CLI，把最新稳定版 OOMOL Connector 插件
-（dsh-oomol）安装到我的 DeepSeek Harness web profile。
-
-安装前确认 Node.js 版本不低于 22.19，并确认 dsh CLI 可用。不要使用
-sudo，不要索取、读取、打印或保存任何 API Key，也不要修改无关的
-Harness profile 或配置。
-
-安装后验证插件已经成功添加。如果必须重启当前 Harness，请不要终止本
-会话，只告诉我准确的重启命令。然后指导我前往“设置 > 插件 > OOMOL
-Connector”配置 OOMOL MCP API Key。如果安装失败，请停止并展示原始错误，
-不要尝试无关的变通方案。
-```
-
-也可以手动安装到 Web profile：
+将插件安装到 Web profile，然后重启 Harness：
 
 ```bash
 dsh plugin --profile web add -w dsh-oomol
-```
-
-### 2. 重启 DeepSeek Harness
-
-插件会在 Harness 重启后生效：
-
-```bash
 dsh web
 ```
 
-打开终端输出的地址。
+插件会出现在 **设置 > 插件 > OOMOL Connector**。
 
-### 3. 获取 OOMOL MCP API Key
+## OOMOL Hosted
 
-打开 [OOMOL Console](https://console.oomol.com/)，注册或登录账号。在左侧展开 **More**，进入 **API Keys**，找到 **OOMOL MCP API key** 区域，点击 **Show** 并复制其中的 Key。
+插件默认连接 OOMOL Hosted：
 
-请使用 **OOMOL MCP API key** 区域里的 Key，不要使用上方的 Default API key，也不要使用下方的 User keys。
-
-![在 OOMOL Console 获取 MCP API Key](./images/oomol-console-mcp-api-key.png)
-
-这个 Key 是专门用于 Harness 的 OOMOL MCP 客户端 Key，不是 DeepSeek 模型 API Key，也不是 Gmail、Notion、GitHub 等 Provider 的凭据。请把它当作 Secret：不要发到聊天中、提交到 Git，或在截图中显示它的值。
-
-### 4. 在 DeepSeek Harness 中配置 Key
-
-1. 打开 DeepSeek Harness 的 **设置**；
-2. 选择 **插件**；
-3. 保持在 **插件配置** 标签页；
-4. 找到并展开 **OOMOL Connector**；
-5. 粘贴 MCP Key，点击 **保存 Key**；
-6. 点击 **测试连接**；
-7. 确认连接状态变为 **已连接**。
-
-保存成功后，卡片会显示 **已配置**，并提示 MCP Key 已安全保存。Harness 不会再次显示已保存的值；只有轮换 Key 时才需要使用 **更换 Key**。
-
-![在 DeepSeek Harness 中配置 OOMOL Connector](./images/deepseek-harness-oomol-settings.png)
-
-浏览器只会收到 Key 是否已配置、来源和是否可写，不会收到已保存的 Key 明文。
-
-### 5. 打开连接中心并连接应用
-
-测试连接成功后，在会话标题栏点击 **连接**。OOMOL 连接中心会在 Harness 官方右侧详情栏中打开；可以搜索应用，并完成 OAuth、API Key 或其他凭据连接流程。
-
-![在 DeepSeek Harness 中打开 OOMOL 连接中心](./images/deepseek-harness-connections.png)
-
-Provider OAuth Token 和 Provider API Key 始终保存在 OOMOL Connector 中，DeepSeek Harness 只保存专用的 OOMOL MCP Key。
-
-看到以下结果就说明配置成功：
-
-- **设置 > 插件** 中出现 OOMOL Connector；
-- 卡片显示 **已配置**；
-- **测试连接** 显示 **已连接**；
-- 会话标题栏的 **连接** 按钮可以打开右侧面板；
-- 已连接应用出现在列表中。
-
-### 6. 开始使用
-
-建议先使用只读的发现提示词：
-
-```text
-显示这个 OOMOL 账号当前可用的连接器。
+```yaml
+- id: oomol
+  name: dsh-oomol
+  config:
+    endpoint: https://connector.oomol.com/v1/mcp
+    teamNameEnv: OOMOL_TEAM_NAME
+    serverName: oomol
+    toolCallTimeoutMs: 60000
+    failOnStartupError: false
 ```
 
-```text
-查找我的 Notion 连接器支持哪些 Actions，先不要执行。
-```
+在 [OOMOL Console](https://console.oomol.com/api-key) 创建 OOMOL MCP API Key，然后保存到插件设置。Harness Credentials 使用 `OOMOL_MCP_API_KEY` 保存它。
 
-对于有副作用的操作，要求 Harness 先展示参数并等待确认：
-
-```text
-准备一个向已连接的表格添加一行的 Action。先展示目标账号、Action 名称和
-准备写入的值，得到我的确认后再执行。
-```
-
-## 当前状态
-
-这是一个遵循 DeepSeek Harness 官方 Bundle、Client Slot、Credentials 和 MCP Client 标准的 Host + Web Plugin，不修改 Harness 源码。项目通过隔离 Profile 安装、Web 启动和自动化测试验证发布质量。
-
-当前版本包含：
-
-- 标准 `dsh.bundle` 包；
-- 通过 Harness Credentials Service 或启动环境解析凭据；
-- OOMOL 托管 MCP Endpoint；
-- 可选 Team 身份；
-- 复用 DSH 官方 MCP Client 的工具发现、注册、超时和重连；
-- 无 Key 时正常启动，配置或轮换 Key 后自动重建 MCP Client；
-- Settings > Plugins 下的 OOMOL Key 配置卡片；
-- 会话标题栏中可打开的原生右侧连接详情面板；
-- 在详情面板中查看、添加和断开 Connector 账号，OAuth 通过弹窗继续；
-- OOMOL 授权与 Provider Catalog 检测，以及不会泄露远端错误文本的连接状态；
-- Key 通过 Harness Credentials Service 只写保存，浏览器永远不会回读明文；
-- 确保 Secret 不进入 Bundle 配置的测试。
-
-免复制 MCP Key 的配对流程和 Action 级策略仍在后续路线图中，详见 [架构](./ARCHITECTURE.md) 和 [路线图](./ROADMAP.md)。
-
-## 开发
-
-```bash
-pnpm install
-pnpm check
-```
-
-运行不会打印凭据值的环境检查：
-
-```bash
-pnpm run doctor
-```
-
-使用真实 OOMOL MCP Client Key 验证 Connector 授权和 Provider Catalog：
-
-```bash
-OOMOL_MCP_API_KEY=... pnpm verify:connector
-```
-
-## 从本地目录安装
-
-```bash
-pnpm build
-dsh plugin --profile web add -w /Users/wushuang/code/dsh-oomol
-```
-
-启动 DeepSeek Harness 后可在 **设置 > 插件 > 插件配置 > OOMOL Connector** 中保存专用 MCP Key。Key 只会写入 Harness Credentials Service，页面只读取“是否已配置、来源和是否可写”。
-
-测试连接成功后，点击会话标题栏的 **连接**，即可在 Harness 原生右侧详情面板里新增、查看和断开 Connector 账号。该面板只使用官方 `details` slot 和 `ctx.layout` 开关服务，因此宽度、拖动缩放、响应式让步和会话行为均由 Harness 管理。插件设置卡片中的 **管理连接** 会打开完整 OOMOL Console。永久 MCP Key 始终留在 Harness Host，不会放进页面 URL，也不会返回给浏览器；在表单中输入的 Provider API Key 或自定义凭据只会单次转发给 OOMOL Connector，本插件不会保存。
-
-也可以在启动 DeepSeek Harness 前通过环境变量提供 Key：
+托管环境可以在启动时提供：
 
 ```bash
 export OOMOL_MCP_API_KEY="api_..."
 dsh web
 ```
 
-使用 Team 身份时再设置：
+团队身份通过环境变量设置：
 
 ```bash
 export OOMOL_TEAM_NAME="your-team"
+dsh web
 ```
 
-使用 Personal 身份时不要设置 `OOMOL_TEAM_NAME`。
+会话中的 Connections 按钮会打开 Harness 原生面板，用于管理 OOMOL Hosted 账号。
 
-`oo` CLI 用于登录、诊断、安装引导和独立验证；普通 Action 调用直接走 OOMOL MCP，不会为每次工具调用启动 CLI，也不会读取 OOCLI 的内部认证文件。
+## Self-hosted OpenConnector
 
-## 安全约束
+在 profile 的 `cordis.patch.yml` 中覆盖 endpoint：
 
-- 不要把 OOMOL Key 或 Provider Credential 提交到 Git。
-- DeepSeek Harness 应使用独立、可撤销的 MCP Key。
-- Provider Credential 始终留在 OOMOL Connector。
-- 对外可见写操作、删除操作和广泛分享操作必须在执行前审查。
-- 正式开放写能力前，必须完成 Action 级审批体验验证。
-- MCP `execute_action` 不具备 HTTP Action API 的 Idempotency-Key 能力；结果未知的写操作不得自动重试。
+```yaml
+- update:
+    id: oomol
+    config:
+      endpoint: http://127.0.0.1:3000/mcp
+```
 
-## License
+插件会将官方地址之外的 endpoint 识别为 self-hosted。本地 OpenConnector 可以使用无鉴权部署。启用 runtime 鉴权后，插件使用 `OOMOL_CONNECT_RUNTIME_TOKEN` 中的 API Key：
 
-MIT
+```bash
+export OOMOL_CONNECT_RUNTIME_TOKEN="oct_..."
+dsh web
+```
+
+也可以在插件设置中保存 Runtime API Key。持久 Runtime Key 由 OpenConnector Console 的 Access 页面创建。
+
+Self-hosted HTTP endpoint 仅支持 `localhost`、`127.0.0.1` 和 `[::1]`。远程部署使用 HTTPS：
+
+```yaml
+- update:
+    id: oomol
+    config:
+      endpoint: https://connect.example.com/mcp
+```
+
+Connections 按钮会打开 endpoint 的 origin。例如 `https://connect.example.com/mcp` 对应 `https://connect.example.com`。
+
+## 自定义 API Key 环境变量
+
+两种模式都可以指定 credential reference：
+
+```yaml
+- update:
+    id: oomol
+    config:
+      endpoint: https://connect.example.com/mcp
+      apiKeyEnv: MY_CONNECT_RUNTIME_TOKEN
+```
+
+Harness Credentials 的优先级高于启动环境。
+
+## 使用 Connector Actions
+
+从查找能力开始：
+
+```text
+列出当前账号可用的 connectors。
+```
+
+```text
+查找可以创建日历事件的 Actions，并读取选中 Action 的 schema。
+```
+
+涉及外部写入时，在执行前明确目标账号和参数。
+
+## 工作原理
+
+插件通过选定 endpoint 挂载 DeepSeek Harness 的 Streamable HTTP MCP client。Connector Actions 按需发现，Harness 只保留少量稳定的 MCP 工具。
+
+OOMOL Hosted 的 Provider credentials 保存在 OOMOL Connector。Self-hosted 的 Provider credentials 保存在 OpenConnector。Harness 只保存 `apiKeyEnv` 指向的 Connector client key。
+
+浏览器只接收 credential reference 和连接状态。Connector API Key 与 Provider credentials 始终位于 Host 侧的 Secret 边界内。
+
+实现细节见[架构说明](./ARCHITECTURE.md)。
+
+## 配置参考
+
+| 字段 | 默认值 | 用途 |
+| --- | --- | --- |
+| `endpoint` | `https://connector.oomol.com/v1/mcp` | Streamable HTTP MCP endpoint |
+| `apiKeyEnv` | 根据 endpoint 推导 | Harness credential reference 和启动环境变量名 |
+| `teamName` | 未设置 | OOMOL Hosted 团队身份 |
+| `teamNameEnv` | `OOMOL_TEAM_NAME` | OOMOL Hosted 团队环境变量名 |
+| `serverName` | `oomol` | Harness MCP 工具命名空间 |
+| `toolCallTimeoutMs` | `60000` | 工具调用超时 |
+| `failOnStartupError` | `false` | MCP 发现失败时终止 Harness 启动 |
+
+默认 credential reference：
+
+| Endpoint 模式 | 默认引用 | 是否必填 |
+| --- | --- | --- |
+| OOMOL Hosted | `OOMOL_MCP_API_KEY` | 是 |
+| Self-hosted | `OOMOL_CONNECT_RUNTIME_TOKEN` | 由 OpenConnector 部署决定 |
+
+## 常见问题
+
+| 现象 | 处理方式 |
+| --- | --- |
+| 设置中没有插件 | 安装到 `web` profile 并重启 `dsh web` |
+| OOMOL Hosted 显示未配置 | 在插件设置中保存 OOMOL MCP API Key |
+| Self-hosted 返回未授权 | 保存该 OpenConnector 实例创建的 Runtime API Key |
+| Self-hosted Console 链接返回 404 | 打开 OpenConnector 部署所配置的 Console 地址 |
+| 缺少预期应用 | 在对应 Connector Console 中配置 Provider connection |
+| Connections 面板没有展开 | 将窗口放大到至少 1220 px，以便 Harness 显示详情栏 |
+
+运行本地诊断：
+
+```bash
+pnpm run doctor
+```
+
+## 安全
+
+- Connector API Key 保存在 Harness Credentials 或启动环境中。
+- 远程 self-hosted endpoint 使用 HTTPS。
+- 执行删除、公开发布、权限变更和大范围共享等操作前核对目标与参数。
+- 副作用调用出现不确定结果时，先在 Provider 中确认结果。
+- 安全问题通过 [SECURITY.md](../SECURITY.md) 报告。
+
+## 开发
+
+```bash
+pnpm install --frozen-lockfile
+pnpm check
+```
+
+构建并安装当前 checkout：
+
+```bash
+pnpm build
+dsh plugin --profile web add -w "$(pwd)"
+```
+
+许可证：MIT

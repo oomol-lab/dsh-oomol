@@ -1,19 +1,20 @@
 # Security Policy
 
-## Reporting a vulnerability
+Report vulnerabilities through GitHub Security Advisories for this repository. Include the affected version, reproduction steps, impact, and suggested mitigation. Revoke exposed Connector or Provider credentials immediately.
 
-Please report security issues privately through GitHub Security Advisories for this repository. Do not open a public issue containing credentials, access tokens, provider data, or exploit details.
+## Credential boundaries
 
-Include the affected version, reproduction steps, impact, and any suggested mitigation. Revoke any exposed OOMOL or Provider credential immediately; do not wait for a repository response.
+- Harness Credentials or the launch environment stores the Connector API key.
+- OOMOL Connector or OpenConnector stores Provider OAuth tokens and API keys.
+- The browser receives credential status and sanitized connection data.
+- Cordis patches, diagnostics, logs, and external Console links contain no credential values.
 
-## Credential boundary
+## Endpoint policy
 
-- Provider OAuth tokens and stored API keys remain in OOMOL Connector. A credential entered in the Connections details panel is forwarded once through the loopback-fenced Host bridge and is not persisted by the plugin.
-- DeepSeek Harness stores only a dedicated, revocable OOMOL MCP client key.
-- Browser code receives only MCP-key configured/source/writable metadata and sanitized connection data; it never receives the stored MCP key or stored Provider credentials.
-- Credentials must not be committed, stored in `cordis.patch.yml`, logged, or included in diagnostics.
-- Use a separate OOMOL key for each Harness installation and revoke it when that installation is retired.
+Remote self-hosted endpoints use HTTPS. Plain HTTP is accepted for loopback hosts during local development. Endpoint URLs reject embedded credentials and fragments.
 
-## Action safety
+## Action execution
 
-Before broad write access is enabled, deployments must verify action-aware approval for externally visible, destructive, permission-changing, and broad-sharing operations. Do not automatically retry side-effecting MCP calls after an ambiguous failure.
+Deployments should present the Provider, Action, account, and important arguments before externally visible, destructive, permission-changing, or broad-sharing operations. An ambiguous side-effecting result requires Provider-side verification before retry.
+
+Removing the plugin leaves Provider connections unchanged. Revoke Connector access in the corresponding OOMOL or OpenConnector Console when an installation should lose access.

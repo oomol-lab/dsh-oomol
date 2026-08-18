@@ -8,7 +8,6 @@
       name: dsh-oomol
       config:
         endpoint: https://connector.oomol.com/v1/mcp
-        apiKeyEnv: OOMOL_MCP_API_KEY
         teamNameEnv: OOMOL_TEAM_NAME
         serverName: oomol
         toolCallTimeoutMs: 60000

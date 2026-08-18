@@ -9,7 +9,7 @@ describe("package safety", () => {
   it("keeps credential values out of the bundle patch", async () => {
     const patch = await readFile(resolve(root, "cordis.patch.yml"), "utf8")
 
-    expect(patch).toContain("apiKeyEnv: OOMOL_MCP_API_KEY")
+    expect(patch).not.toContain("apiKeyEnv:")
     expect(patch).not.toMatch(/Authorization\s*:/i)
     expect(patch).not.toMatch(/api_[A-Za-z0-9_-]{8,}/)
   })
