@@ -17,6 +17,9 @@ export function createConnectionsRpcHandler(context: ConnectionsRpcContext) {
     try {
       const connection = await context.resolveConnection()
       if (!connection) return rpcError("unconfigured", "Configure an OOMOL MCP key first.")
+      if (connection.mode !== "oomol-hosted") {
+        return rpcError("unsupported", "Manage self-hosted connections in OpenConnector Console.")
+      }
 
       if (endpoint === "connections/list") {
         const [providers, apps] = await Promise.all([

@@ -102,7 +102,7 @@ declare module "@deepseek-ai/dsh-client-ui-slots" {
 export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   open: "Connections",
   title: "OOMOL Connections",
-  subtitle: "{count} apps. Every connection your agents need.",
+  subtitle: "{count} available apps",
   close: "Close",
   refresh: "Refresh",
   search: "Search apps",
@@ -171,7 +171,7 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
 export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   open: "连接",
   title: "OOMOL 连接中心",
-  subtitle: "{count} 第三方应用，你想要的连接，应有尽有。",
+  subtitle: "{count} 个可用应用",
   close: "关闭",
   refresh: "刷新",
   search: "搜索应用",
@@ -362,18 +362,40 @@ export class ConnectionsController {
 type HeaderProps = PropsRuntime<"conversation.session.header.utilities"> & PropsLocale<typeof CONNECTIONS_NS>
 type DetailsProps = PropsRuntime<"details"> & PropsLocale<typeof CONNECTIONS_NS>
 
+interface ConnectorConfiguration {
+  connectionsManagement: "embedded" | "external"
+  consoleUrl: string
+}
+
 export function createConnectionsComponents(
   connection: ConnectionHandle,
   controller: ConnectionsController,
   layout: ILayout,
 ) {
   function ConnectionsHeaderButton({ t }: HeaderProps) {
+    const [configuration, setConfiguration] = useState<ConnectorConfiguration>()
+
+    useEffect(() => {
+      let active = true
+      void connection.rpc.call("/oomol", "configuration", {}).then((response) => {
+        if (active && response.ok && isConnectorConfiguration(response.value)) {
+          setConfiguration(response.value)
+        }
+      })
+      return () => { active = false }
+    }, [])
+
     return (
       <button
         type="button"
         aria-label={t("title")}
+        disabled={!configuration}
         style={styles.headerButton}
         onClick={() => {
+          if (configuration?.connectionsManagement === "external") {
+            window.open(configuration.consoleUrl, "_blank", "noopener,noreferrer")
+            return
+          }
           controller.requestList()
           layout.openDetails()
         }}
@@ -396,6 +418,14 @@ export function createConnectionsComponents(
   }
 
   return { ConnectionsHeaderButton, ConnectionsDetails }
+}
+
+function isConnectorConfiguration(value: unknown): value is ConnectorConfiguration {
+  if (typeof value !== "object" || value === null) return false
+  return "connectionsManagement" in value
+    && (value.connectionsManagement === "embedded" || value.connectionsManagement === "external")
+    && "consoleUrl" in value
+    && typeof value.consoleUrl === "string"
 }
 
 function ConnectionsPanel({
@@ -587,7 +617,7 @@ function ConnectionsPanel({
                   : connectionState === "needs_attention"
                     ? t("needsAttention")
                     : connectionState === "connected"
-                      ? `${t("connected")} · ${apps.length}`
+                      ? `${t("connected")} (${apps.length})`
                       : t("notConnected")
                 const statusStyle = connectionState === "ambiguous" || connectionState === "needs_attention"
                   ? styles.statusWarning
@@ -750,8 +780,8 @@ function ProviderView({
                   {sortedApps.map((app) => (
                     <option key={app.id} value={app.id}>
                       {accountPrimaryLabel(app)}
-                      {app.isDefault ? ` · ${t("defaultConnection")}` : ""}
-                      {app.status !== "active" ? ` · ${connectionStatusLabel(app.status, t)}` : ""}
+                      {app.isDefault ? ` (${t("defaultConnection")})` : ""}
+                      {app.status !== "active" ? ` (${connectionStatusLabel(app.status, t)})` : ""}
                     </option>
                   ))}
                 </select>
@@ -994,7 +1024,7 @@ function ConnectionForm({
                 disabled={option.required}
                 onChange={(event) => setScopes((current) => event.target.checked ? [...new Set([...current, option.value])] : current.filter((scope) => scope !== option.value))}
               />
-              <span>{option.value}{option.required ? ` · ${t("required")}` : ""}</span>
+              <span>{option.value}{option.required ? ` (${t("required")})` : ""}</span>
             </label>
           ))}
         </fieldset>
@@ -1096,7 +1126,7 @@ function StatePanel({ children }: { children: ReactNode }) {
 }
 
 function authTypeLabels(types: AuthType[], t: (key: ConnectionsLocaleKey) => string) {
-  return types.map((type) => authTypeLabel(type, t)).join(" · ")
+  return types.map((type) => authTypeLabel(type, t)).join(", ")
 }
 
 function authTypeLabel(type: AuthType, t: (key: ConnectionsLocaleKey) => string) {

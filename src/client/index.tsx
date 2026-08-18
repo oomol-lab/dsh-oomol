@@ -12,7 +12,6 @@ import {
   createConnectionsComponents,
 } from "./connections.js"
 
-const API_KEY_REF = "OOMOL_MCP_API_KEY"
 const NS = "oomol.settings"
 
 type LocaleKey =
@@ -20,8 +19,11 @@ type LocaleKey =
   | "description"
   | "apiKey"
   | "replacementApiKey"
+  | "runtimeApiKey"
+  | "replacementRuntimeApiKey"
   | "configured"
   | "unconfigured"
+  | "optional"
   | "storedCredential"
   | "replaceKey"
   | "cancelReplace"
@@ -53,6 +55,7 @@ type LocaleKey =
   | "connections"
   | "keys"
   | "logs"
+  | "openConnectorConsole"
 
 declare module "@deepseek-ai/dsh-client-ui-slots" {
   interface LocaleNamespaceMap {
@@ -66,6 +69,15 @@ interface CredentialState {
   configured: boolean
   writable: boolean
   source?: string
+}
+
+interface ConnectorConfiguration {
+  mode: "oomol-hosted" | "self-hosted"
+  endpoint: string
+  apiKeyEnv: string
+  credentialRequired: boolean
+  connectionsManagement: "embedded" | "external"
+  consoleUrl: string
 }
 
 type ConnectionPhase = "unconfigured" | "connecting" | "connected" | "unauthorized" | "rate-limited" | "unavailable"
@@ -84,9 +96,12 @@ const en: Record<LocaleKey, string> = {
   description: "Connect DeepSeek Harness to OOMOL apps and Actions.",
   apiKey: "OOMOL MCP client key",
   replacementApiKey: "New OOMOL MCP client key",
+  runtimeApiKey: "Runtime API key (optional)",
+  replacementRuntimeApiKey: "New runtime API key",
   configured: "Configured",
   unconfigured: "Not configured",
-  storedCredential: "The MCP key is securely stored. Its value cannot be displayed.",
+  optional: "Optional",
+  storedCredential: "Harness Credentials stores this key securely.",
   replaceKey: "Replace key",
   cancelReplace: "Cancel",
   source: "Source: {source}",
@@ -99,7 +114,7 @@ const en: Record<LocaleKey, string> = {
   unavailable: "Unavailable",
   lastChecked: "Last checked: {time}",
   toolCount: "Discovery tools: {count}",
-  writeOnlyHint: "The key is write-only. It is stored by Harness Credentials and is never returned to this page.",
+  writeOnlyHint: "Harness Credentials stores the key as a write-only secret.",
   save: "Save key",
   saving: "Saving…",
   remove: "Remove key",
@@ -117,6 +132,7 @@ const en: Record<LocaleKey, string> = {
   connections: "Manage in Console",
   keys: "Manage API keys",
   logs: "View run logs",
+  openConnectorConsole: "Open OpenConnector Console",
 }
 
 const zh: Record<LocaleKey, string> = {
@@ -124,9 +140,12 @@ const zh: Record<LocaleKey, string> = {
   description: "将 DeepSeek Harness 连接到 OOMOL 应用和 Actions。",
   apiKey: "OOMOL MCP 客户端 Key",
   replacementApiKey: "新的 OOMOL MCP 客户端 Key",
+  runtimeApiKey: "Runtime API Key（可选）",
+  replacementRuntimeApiKey: "新的 Runtime API Key",
   configured: "已配置",
   unconfigured: "未配置",
-  storedCredential: "MCP Key 已安全保存，出于安全原因不会显示明文。",
+  optional: "可选",
+  storedCredential: "Key 已安全保存在 Harness Credentials 中。",
   replaceKey: "更换 Key",
   cancelReplace: "取消更换",
   source: "来源：{source}",
@@ -139,7 +158,7 @@ const zh: Record<LocaleKey, string> = {
   unavailable: "暂时不可用",
   lastChecked: "上次检测：{time}",
   toolCount: "发现工具数：{count}",
-  writeOnlyHint: "Key 只能写入，由 Harness Credentials 保存，页面永远不会读取或回显明文。",
+  writeOnlyHint: "Harness Credentials 会以只写 Secret 保存 Key。",
   save: "保存 Key",
   saving: "保存中…",
   remove: "删除 Key",
@@ -157,6 +176,7 @@ const zh: Record<LocaleKey, string> = {
   connections: "在 Console 管理连接",
   keys: "管理 API Key",
   logs: "查看运行日志",
+  openConnectorConsole: "打开 OpenConnector Console",
 }
 
 export const inject = ["slots", "locale", "connection", "layout"]
@@ -175,6 +195,7 @@ export function apply(ctx: ClientContext): void {
   function OomolSettingsCard({ t }: CardProps) {
     const [open, setOpen] = useState(false)
     const [credential, setCredential] = useState<CredentialState>({ configured: false, writable: true })
+    const [configuration, setConfiguration] = useState<ConnectorConfiguration>()
     const [connector, setConnector] = useState<ConnectorStatus>({ phase: "unconfigured" })
     const [draft, setDraft] = useState("")
     const [editingKey, setEditingKey] = useState(false)
@@ -184,12 +205,18 @@ export function apply(ctx: ClientContext): void {
 
     const refresh = useCallback(async () => {
       try {
+        const configurationResponse = await (ctx.get("connection") as ConnectionHandle).rpc.call("/oomol", "configuration", {})
+        if (!configurationResponse.ok || !isConnectorConfiguration(configurationResponse.value)) {
+          throw new Error("Invalid Connector configuration")
+        }
+        const nextConfiguration = configurationResponse.value
         const [credentialResponse, connectorResponse] = await Promise.all([
-          api.credentials.describe({ refs: [API_KEY_REF] }),
+          api.credentials.describe({ refs: [nextConfiguration.apiKeyEnv] }),
           (ctx.get("connection") as ConnectionHandle).rpc.call("/oomol", "status", {}),
         ])
         if (!credentialResponse.result.ok) throw new Error(credentialResponse.result.error.message)
-        const view = credentialResponse.result.value.credentials[API_KEY_REF]
+        const view = credentialResponse.result.value.credentials[nextConfiguration.apiKeyEnv]
+        setConfiguration(nextConfiguration)
         setCredential({
           configured: view?.configured ?? false,
           writable: view?.writable ?? true,
@@ -204,7 +231,7 @@ export function apply(ctx: ClientContext): void {
     }, [])
 
     const testConnection = async (force = false) => {
-      if (testing || (!force && (busy || !credential.configured))) return
+      if (testing || (!force && (busy || (configuration?.credentialRequired && !credential.configured)))) return
       setTesting(true)
       setMessage(undefined)
       setConnector((current) => ({ ...current, phase: "connecting" }))
@@ -226,11 +253,11 @@ export function apply(ctx: ClientContext): void {
 
     const save = async () => {
       const value = draft.trim()
-      if (!value || busy) return
+      if (!value || busy || !configuration) return
       setBusy(true)
       setMessage(undefined)
       try {
-        const response = await api.credentials.set({ ref: API_KEY_REF, value })
+        const response = await api.credentials.set({ ref: configuration.apiKeyEnv, value })
         if (!response.result.ok) throw new Error(response.result.error.message)
         setDraft("")
         setEditingKey(false)
@@ -246,11 +273,11 @@ export function apply(ctx: ClientContext): void {
     }
 
     const remove = async () => {
-      if (busy) return
+      if (busy || !configuration) return
       setBusy(true)
       setMessage(undefined)
       try {
-        const response = await api.credentials.unset({ ref: API_KEY_REF })
+        const response = await api.credentials.unset({ ref: configuration.apiKeyEnv })
         if (!response.result.ok) throw new Error(response.result.error.message)
         setDraft("")
         setEditingKey(false)
@@ -284,7 +311,7 @@ export function apply(ctx: ClientContext): void {
           </span>
           {dirty ? <span style={styles.pending}>{t("unsaved")}</span> : null}
           <span style={credential.configured ? styles.badgeSet : styles.badgeUnset}>
-            {t(credential.configured ? "configured" : "unconfigured")}
+            {t(credential.configured ? "configured" : configuration?.credentialRequired === false ? "optional" : "unconfigured")}
           </span>
           <SettingsChevron open={open} />
         </button>
@@ -300,7 +327,9 @@ export function apply(ctx: ClientContext): void {
             {showKeyEditor ? (
               <>
                 <label htmlFor="oomol-mcp-api-key" style={styles.label}>
-                  {t(credential.configured ? "replacementApiKey" : "apiKey")}
+                  {t(configuration?.mode === "self-hosted"
+                    ? credential.configured ? "replacementRuntimeApiKey" : "runtimeApiKey"
+                    : credential.configured ? "replacementApiKey" : "apiKey")}
                 </label>
                 <input
                   id="oomol-mcp-api-key"
@@ -361,17 +390,23 @@ export function apply(ctx: ClientContext): void {
               <button type="button" disabled={busy} style={{ ...styles.secondary, ...(busy ? styles.disabledButton : {}) }} onClick={() => { void refresh() }}>
                 {t("refresh")}
               </button>
-              <button type="button" disabled={busy || testing || !credential.configured} style={{ ...styles.secondary, ...((busy || testing || !credential.configured) ? styles.disabledButton : {}) }} onClick={() => { void testConnection() }}>
+              <button type="button" disabled={busy || testing || (configuration?.credentialRequired === true && !credential.configured)} style={{ ...styles.secondary, ...((busy || testing || (configuration?.credentialRequired === true && !credential.configured)) ? styles.disabledButton : {}) }} onClick={() => { void testConnection() }}>
                 {t(testing ? "testing" : "testConnection")}
               </button>
             </div>
 
-            <div style={styles.links}>
-              <span style={styles.linksLabel}>{t("links")}</span>
-              <a href="https://console.oomol.com/connections" target="_blank" rel="noreferrer">{t("connections")}</a>
-              <a href="https://console.oomol.com/api-key" target="_blank" rel="noreferrer">{t("keys")}</a>
-              <a href="https://console.oomol.com" target="_blank" rel="noreferrer">{t("logs")}</a>
-            </div>
+            {configuration ? configuration.mode === "self-hosted" ? (
+              <div style={styles.links}>
+                <a href={configuration.consoleUrl} target="_blank" rel="noreferrer">{t("openConnectorConsole")}</a>
+              </div>
+            ) : (
+              <div style={styles.links}>
+                <span style={styles.linksLabel}>{t("links")}</span>
+                <a href="https://console.oomol.com/connections" target="_blank" rel="noreferrer">{t("connections")}</a>
+                <a href="https://console.oomol.com/api-key" target="_blank" rel="noreferrer">{t("keys")}</a>
+                <a href="https://console.oomol.com" target="_blank" rel="noreferrer">{t("logs")}</a>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </li>
@@ -402,6 +437,18 @@ export function apply(ctx: ClientContext): void {
 function isConnectorStatus(value: unknown): value is ConnectorStatus {
   if (typeof value !== "object" || value === null || !("phase" in value)) return false
   return ["unconfigured", "connecting", "connected", "unauthorized", "rate-limited", "unavailable"].includes(String(value.phase))
+}
+
+function isConnectorConfiguration(value: unknown): value is ConnectorConfiguration {
+  if (typeof value !== "object" || value === null) return false
+  return "mode" in value
+    && (value.mode === "oomol-hosted" || value.mode === "self-hosted")
+    && "endpoint" in value && typeof value.endpoint === "string"
+    && "apiKeyEnv" in value && typeof value.apiKeyEnv === "string"
+    && "credentialRequired" in value && typeof value.credentialRequired === "boolean"
+    && "connectionsManagement" in value
+    && (value.connectionsManagement === "embedded" || value.connectionsManagement === "external")
+    && "consoleUrl" in value && typeof value.consoleUrl === "string"
 }
 
 function localeKeyForPhase(phase: ConnectionPhase): LocaleKey {

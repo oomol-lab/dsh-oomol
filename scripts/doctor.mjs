@@ -11,6 +11,12 @@ const checks = [
     ok: Boolean(process.env.OOMOL_MCP_API_KEY),
     required: false,
   },
+  {
+    detail: process.env.OOMOL_CONNECT_RUNTIME_TOKEN ? "configured in the launching environment" : "not set",
+    name: "OOMOL_CONNECT_RUNTIME_TOKEN",
+    ok: Boolean(process.env.OOMOL_CONNECT_RUNTIME_TOKEN),
+    required: false,
+  },
 ]
 
 let failed = false

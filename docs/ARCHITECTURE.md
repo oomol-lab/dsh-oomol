@@ -1,74 +1,62 @@
 # Architecture
 
-## Runtime path
+## Runtime modes
 
-```text
-DeepSeek Harness
-  -> dsh-oomol
-  -> @deepseek-ai/dsh-mcp-client
-  -> https://connector.oomol.com/v1/mcp
-  -> OOMOL Connector action
-  -> connected Provider account
+`dsh-oomol` connects one DeepSeek Harness profile to one Connector endpoint. The normalized endpoint determines the runtime mode:
+
+| Mode | Endpoint | Default API key reference |
+| --- | --- | --- |
+| `oomol-hosted` | `https://connector.oomol.com/v1/mcp` | `OOMOL_MCP_API_KEY` |
+| `self-hosted` | Any other accepted endpoint | `OOMOL_CONNECT_RUNTIME_TOKEN` |
+
+The mode is derived state returned to the Web client through loopback RPC. Cordis configuration contains no mode selector.
+
+## Host runtime
+
+The Host resolves the API key through Harness Credentials first and the launch environment second. OOMOL Hosted requires a key. Self-hosted OpenConnector can initialize without one when its deployment permits anonymous runtime access.
+
+The official DeepSeek Harness MCP client owns Streamable HTTP initialization, tool discovery, registration, execution, and disposal. The plugin enables startup failure reporting on the child MCP client, converts the result into sanitized connection status, and applies the plugin-level `failOnStartupError` policy.
+
+Credential updates dispose the active MCP client and create a fresh one. A manual connection test uses the same reload path, so the reported status reflects MCP initialization and discovery.
+
+## Endpoint security
+
+Remote endpoints use HTTPS. Plain HTTP is accepted for `localhost`, `127.0.0.1`, and `[::1]`. Endpoint URLs reject embedded credentials and fragments.
+
+API keys are sent as Bearer credentials after endpoint validation. OOMOL Hosted can also receive the selected team name through `x-oo-team-name`.
+
+## Client configuration
+
+The loopback-only `/oomol` RPC exposes a safe configuration view:
+
+```ts
+interface ConnectorConfiguration {
+  mode: "oomol-hosted" | "self-hosted"
+  endpoint: string
+  apiKeyEnv: string
+  credentialRequired: boolean
+  connectionsManagement: "embedded" | "external"
+  consoleUrl: string
+}
 ```
 
-The plugin is deliberately thin. It resolves an OOMOL MCP client credential, constructs the Streamable HTTP connection, and delegates protocol handling and tool registration to the official DeepSeek Harness MCP client.
+The credential value and request headers remain Host-side. The settings card uses `apiKeyEnv` with the Harness Credentials API and displays mode-specific labels.
 
-The Host plugin remains active while the credential is absent. Its browser half writes the key through the loopback-fenced Harness Credentials API; `credentials/updated` then causes the Host half to dispose the old MCP client and mount a new one. The browser receives credential metadata only and never receives the value.
+## Connection management
 
-Connection testing checks Connector authorization and Provider-catalog access. The official DeepSeek Harness MCP client remains the sole runtime MCP bridge and owns initialization, discovery, tool registration, and reconnect behavior. A loopback-only `/oomol` RPC channel returns sanitized connection state; raw remote errors and request headers never cross into the browser.
+OOMOL Hosted uses the native Harness details panel. A loopback BFF calls the fixed OOMOL Hosted Provider and app routes, sanitizes responses, and forwards Provider credentials only for the active connection request.
 
-The same loopback-only channel provides a small Connections BFF for the native right-side details panel. The panel occupies Harness's official `details` slot and opens or closes only through `ctx.layout`; Harness owns its geometry and responsive behavior. The browser receives a sanitized Provider catalog and connection metadata. The Host resolves the permanent MCP key and calls fixed OOMOL Connector REST routes; the permanent key never enters browser state or a URL. OAuth uses the existing Console callback in a popup and the panel detects completion by polling sanitized connection metadata, so this flow does not require Console changes.
+Self-hosted runtime keys authorize `/mcp` and `/v1`. OpenConnector's `/api` management routes use its administrative authentication boundary. The plugin opens the endpoint origin in a new browser tab so users can manage connections in OpenConnector Console.
 
-## Responsibilities
+## Progressive discovery
 
-### DeepSeek Harness
+The Connector MCP server publishes a small discovery and execution surface. Harness searches Actions, loads the selected guide or schema, and executes the chosen Action. Provider catalogs remain outside the permanent Harness tool registry.
 
-- Agent loop and model interaction
-- Native tool registry
-- Tool approval and result presentation
-- Plugin lifecycle
+## Security boundaries
 
-### This plugin
-
-- OOMOL endpoint configuration
-- OOMOL MCP credential reference
-- Personal or team identity header
-- MCP client lifecycle composition
-- Web settings card for write-only key configuration
-- Credential-change-driven MCP client reload
-- Credential-safe connection health and explicit test-connection flow
-- Native Connections details panel and credential-fenced Connector REST bridge
-- Future pairing and approval presentation
-
-### OOMOL Connector
-
-- Provider catalog and action schemas
-- Provider OAuth, API keys, and custom credentials
-- Token refresh and connection identity
-- Action execution and logs
-- Team and server-side policy
-
-### OOCLI
-
-- OOMOL login and diagnostics
-- Headless verification of search, schema, apps, and execution
-- Skill synchronization through `~/.agents/skills`
-- Future `dsh` bootstrap and doctor integration
-
-## Credential boundary
-
-Provider secrets are never persisted by this plugin. API keys or custom credentials entered in the details panel make one loopback-fenced request to the Host, which forwards them to a fixed OOMOL Connector endpoint and discards them after the request. Provider tokens and stored credentials remain in OOMOL Connector and are never returned to the browser.
-
-The plugin resolves one OOMOL MCP client key from the Harness credentials service or launching environment. The Host uses it for MCP Authorization and for the Connections BFF, but never returns it to browser code or places it in a URL. A missing key is an unconfigured state rather than a Host startup error, which keeps the settings surface available after first install.
-
-The bundle patch contains only the credential reference name. This keeps the secret out of the profile manifest and the normal `--dump-config` output for the bundle layer.
-
-## Tool discovery
-
-OOMOL MCP uses progressive disclosure. DeepSeek Harness receives a small stable discovery surface instead of every Provider action schema at startup. The model searches for actions, reads the selected guide, then executes the exact action.
-
-## Approval boundary
-
-Before production release, verify that Harness approval UI clearly identifies the underlying Provider, Action, account, and important arguments for a generic MCP execution tool. If the official MCP bridge cannot provide an adequate approval view, add a thin action-aware approval controller without replacing the OOMOL MCP protocol.
-
-Side-effecting MCP calls must not be automatically retried after an ambiguous transport failure. The HTTP Action API supports idempotency keys, but the current MCP `execute_action` contract does not.
+- Harness Credentials stores the Connector client key.
+- OOMOL Connector or OpenConnector stores Provider credentials.
+- Loopback RPC returns sanitized configuration, status, Provider, and app data.
+- External Console links contain only a validated origin.
+- MCP failures map to stable status codes before reaching browser state.
+- Side-effecting calls with unknown outcomes require Provider-side verification before retry.

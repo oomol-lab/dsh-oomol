@@ -1,7 +1,10 @@
 export const DEFAULT_MCP_ENDPOINT = "https://connector.oomol.com/v1/mcp"
 export const DEFAULT_API_KEY_ENV = "OOMOL_MCP_API_KEY"
+export const DEFAULT_SELF_HOSTED_API_KEY_ENV = "OOMOL_CONNECT_RUNTIME_TOKEN"
 export const DEFAULT_TEAM_NAME_ENV = "OOMOL_TEAM_NAME"
 export const DEFAULT_SERVER_NAME = "oomol"
+
+export type ConnectorMode = "oomol-hosted" | "self-hosted"
 
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 const CREDENTIAL_REF_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
@@ -22,11 +25,23 @@ export interface RuntimeValues {
 }
 
 export interface ResolvedOomolConnection {
+  mode: ConnectorMode
   endpoint: string
+  apiKeyEnv: string
   headers: Record<string, string>
+  consoleUrl: string
   serverName: string
   toolCallTimeoutMs: number
   failOnStartupError: boolean
+}
+
+export interface ConnectorConfiguration {
+  mode: ConnectorMode
+  endpoint: string
+  apiKeyEnv: string
+  credentialRequired: boolean
+  connectionsManagement: "embedded" | "external"
+  consoleUrl: string
 }
 
 export async function resolveOomolConnection(
@@ -36,7 +51,7 @@ export async function resolveOomolConnection(
   const resolved = await resolveOomolConnectionIfConfigured(config, runtime)
   if (resolved) return resolved
 
-  const apiKeyEnv = nonEmpty(config.apiKeyEnv) ?? DEFAULT_API_KEY_ENV
+  const apiKeyEnv = resolveConnectorConfiguration(config).apiKeyEnv
   throw new Error(
     `OOMOL Connector is not configured. Store credential ${apiKeyEnv} in DeepSeek Harness or export ${apiKeyEnv} before starting dsh.`,
   )
@@ -50,18 +65,19 @@ export async function resolveOomolConnectionIfConfigured(
   config: OomolConnectorConfig,
   runtime: RuntimeValues,
 ): Promise<ResolvedOomolConnection | undefined> {
-  const apiKeyEnv = nonEmpty(config.apiKeyEnv) ?? DEFAULT_API_KEY_ENV
-  validateCredentialRef(apiKeyEnv, "apiKeyEnv")
+  const configuration = resolveConnectorConfiguration(config)
+  const { apiKeyEnv, endpoint, mode } = configuration
   const storedApiKey = nonEmpty(await runtime.readCredential(apiKeyEnv))
   const environmentApiKey = nonEmpty(runtime.readEnvironment(apiKeyEnv))
   const apiKey = storedApiKey ?? environmentApiKey
 
-  if (!apiKey) return undefined
+  if (!apiKey && mode === "oomol-hosted") return undefined
 
   const teamNameEnv = nonEmpty(config.teamNameEnv) ?? DEFAULT_TEAM_NAME_ENV
   validateCredentialRef(teamNameEnv, "teamNameEnv")
-  const teamName = nonEmpty(config.teamName) ?? nonEmpty(runtime.readEnvironment(teamNameEnv))
-  const endpoint = normalizeMcpEndpoint(config.endpoint ?? DEFAULT_MCP_ENDPOINT)
+  const teamName = mode === "oomol-hosted"
+    ? nonEmpty(config.teamName) ?? nonEmpty(runtime.readEnvironment(teamNameEnv))
+    : undefined
   const serverName = nonEmpty(config.serverName) ?? DEFAULT_SERVER_NAME
 
   if (!SERVER_NAME_PATTERN.test(serverName)) {
@@ -74,14 +90,31 @@ export async function resolveOomolConnectionIfConfigured(
   }
 
   return {
+    mode,
     endpoint,
+    apiKeyEnv,
     failOnStartupError: config.failOnStartupError ?? false,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      ...(teamName ? { "x-oo-team-name": teamName } : {}),
-    },
+    headers: apiKey
+      ? { Authorization: `Bearer ${apiKey}`, ...(teamName ? { "x-oo-team-name": teamName } : {}) }
+      : {},
+    consoleUrl: configuration.consoleUrl,
     serverName,
     toolCallTimeoutMs,
+  }
+}
+
+export function resolveConnectorConfiguration(config: OomolConnectorConfig): ConnectorConfiguration {
+  const endpoint = normalizeMcpEndpoint(config.endpoint ?? DEFAULT_MCP_ENDPOINT)
+  const mode = connectorModeFromEndpoint(endpoint)
+  const apiKeyEnv = nonEmpty(config.apiKeyEnv) ?? defaultApiKeyEnv(mode)
+  validateCredentialRef(apiKeyEnv, "apiKeyEnv")
+  return {
+    mode,
+    endpoint,
+    apiKeyEnv,
+    credentialRequired: mode === "oomol-hosted",
+    connectionsManagement: mode === "oomol-hosted" ? "embedded" : "external",
+    consoleUrl: new URL(endpoint).origin,
   }
 }
 
@@ -108,8 +141,31 @@ export function normalizeMcpEndpoint(value: string): string {
   if (url.hash) {
     throw new Error("OOMOL MCP endpoint must not contain a fragment")
   }
+  if (url.protocol === "http:" && !isLoopbackHostname(url.hostname)) {
+    throw new Error("HTTP OOMOL MCP endpoints must use localhost or a loopback IP address")
+  }
 
   return url.toString()
+}
+
+export function connectorModeFromEndpoint(endpoint: string): ConnectorMode {
+  return comparableEndpoint(endpoint) === comparableEndpoint(DEFAULT_MCP_ENDPOINT)
+    ? "oomol-hosted"
+    : "self-hosted"
+}
+
+export function defaultApiKeyEnv(mode: ConnectorMode): string {
+  return mode === "oomol-hosted" ? DEFAULT_API_KEY_ENV : DEFAULT_SELF_HOSTED_API_KEY_ENV
+}
+
+function comparableEndpoint(value: string): string {
+  const url = new URL(value)
+  url.pathname = url.pathname.replace(/\/$/, "")
+  return url.toString()
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
 }
 
 function nonEmpty(value: string | undefined): string | undefined {

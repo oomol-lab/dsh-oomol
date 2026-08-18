@@ -4,12 +4,15 @@ import { createConnectionsRpcHandler } from "../src/connections.js"
 import type { ResolvedOomolConnection } from "../src/runtime.js"
 
 const connection: ResolvedOomolConnection = {
+  mode: "oomol-hosted",
   endpoint: "https://connector.oomol.com/v1/mcp",
+  apiKeyEnv: "OOMOL_MCP_API_KEY",
   headers: {
     Authorization: "Bearer api-secret",
     "x-oo-team-name": "example-team",
   },
   serverName: "oomol",
+  consoleUrl: "https://connector.oomol.com",
   toolCallTimeoutMs: 60_000,
   failOnStartupError: false,
 }
@@ -253,6 +256,25 @@ describe("OOMOL Connections RPC", () => {
     const response = await handler("connections/list", {}, signal)
 
     expect(response).toMatchObject({ ok: false, error: { reason: "unconfigured" } })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("directs self-hosted connection management to OpenConnector Console", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    const handler = createConnectionsRpcHandler({
+      resolveConnection: async () => ({
+        ...connection,
+        mode: "self-hosted",
+        endpoint: "http://127.0.0.1:3006/mcp",
+        apiKeyEnv: "OOMOL_CONNECT_RUNTIME_TOKEN",
+        consoleUrl: "http://127.0.0.1:3006",
+      }),
+    })
+
+    const response = await handler("connections/list", {}, signal)
+
+    expect(response).toMatchObject({ ok: false, error: { reason: "unsupported" } })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
