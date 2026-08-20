@@ -42,8 +42,14 @@ describe("package safety", () => {
     const client = await readFile(resolve(root, "src/client/index.tsx"), "utf8")
 
     expect(client).toContain('const SETTINGS_NAMESPACE = "oomol"')
-    expect(client).toMatch(/name:\s*"settings\.plugin\.item",\s*key:\s*SETTINGS_NAMESPACE,/)
-    expect(client).not.toMatch(/name:\s*"settings\.plugin\.item",\s*id:/)
+    const registration = client.match(
+      /ctx\.slots\.inject\("settings\.plugin\.item",\s*\(\)\s*=>\s*ctx\.slots\.register\(\{([\s\S]*?)\},\s*OomolSettingsCard\)\)/,
+    )?.[1]
+
+    expect(registration).toBeDefined()
+    expect(registration).toMatch(/name:\s*"settings\.plugin\.item"/)
+    expect(registration).toMatch(/key:\s*SETTINGS_NAMESPACE/)
+    expect(registration).not.toMatch(/\bid\s*:/)
   })
 
   it("ships the doctor and authenticated verification scripts", async () => {
