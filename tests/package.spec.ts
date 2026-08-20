@@ -25,6 +25,33 @@ describe("package safety", () => {
     expect(manifest.exports).toHaveProperty("./client")
   })
 
+  it("bounds preview Harness peers to the verified rc.7 and rc.8 contracts", async () => {
+    const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
+      peerDependencies?: Record<string, string>
+    }
+    const harnessPeers = Object.entries(manifest.peerDependencies ?? {})
+      .filter(([name]) => name.startsWith("@deepseek-ai/dsh-"))
+
+    expect(harnessPeers.length).toBeGreaterThan(0)
+    for (const [, range] of harnessPeers) {
+      expect(range).toBe(">=0.1.0-rc.7 <0.1.0-rc.9")
+    }
+  })
+
+  it("registers the settings card with the keyed-slot contract", async () => {
+    const client = await readFile(resolve(root, "src/client/index.tsx"), "utf8")
+
+    expect(client).toContain('const SETTINGS_NAMESPACE = "oomol"')
+    const registration = client.match(
+      /ctx\.slots\.inject\("settings\.plugin\.item",\s*\(\)\s*=>\s*ctx\.slots\.register\(\{([\s\S]*?)\},\s*OomolSettingsCard\)\)/,
+    )?.[1]
+
+    expect(registration).toBeDefined()
+    expect(registration).toMatch(/name:\s*"settings\.plugin\.item"/)
+    expect(registration).toMatch(/key:\s*SETTINGS_NAMESPACE/)
+    expect(registration).not.toMatch(/\bid\s*:/)
+  })
+
   it("ships the doctor and authenticated verification scripts", async () => {
     const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
       files?: string[]

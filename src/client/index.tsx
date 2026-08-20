@@ -12,6 +12,7 @@ import {
   createConnectionsComponents,
 } from "./connections.js"
 
+const SETTINGS_NAMESPACE = "oomol"
 const NS = "oomol.settings"
 
 type LocaleKey =
@@ -415,7 +416,7 @@ export function apply(ctx: ClientContext): void {
 
   ctx.slots.inject("settings.plugin.item", () => ctx.slots.register({
     name: "settings.plugin.item",
-    key: "oomol",
+    key: SETTINGS_NAMESPACE,
     locale: NS,
   }, OomolSettingsCard))
 
