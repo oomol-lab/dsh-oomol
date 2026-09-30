@@ -1,6 +1,6 @@
 {
   "name": "dsh-oomol",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "OOMOL Connector integration for DeepSeek Harness: connect apps and call Actions through progressive MCP discovery.",
   "type": "module",
   "main": "./lib/index.js",
@@ -32,12 +32,11 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-settings-plugins"
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
       ],
       "platform": "web"
     }
@@ -79,19 +78,19 @@
   },
   "packageManager": "pnpm@9.14.4",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-client-connection": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-client-locale": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-client-ui-layout": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-client-ui-settings-plugins": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-credentials": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-launch-environment": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-mcp-client": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/dsh-settings": ">=0.1.0-rc.7 <0.1.0-rc.9",
-    "@deepseek-ai/schemastery": "^3.18.1",
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-api-remotes": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-client-connection": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-credentials": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-launch-environment": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/dsh-mcp-client": ">=0.2.0-rc.2 <0.2.1",
+    "@deepseek-ai/schemastery": "^3.18.4",
     "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
@@ -107,16 +106,7 @@
     "@deepseek-ai/dsh-client-locale": {
       "optional": true
     },
-    "@deepseek-ai/dsh-client-runtime": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-client-ui-settings-plugins": {
-      "optional": true
-    },
     "@deepseek-ai/dsh-client-ui-conversation": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-client-ui-layout": {
       "optional": true
     },
     "@deepseek-ai/dsh-client-ui-slots": {
@@ -133,23 +123,35 @@
     },
     "react": {
       "optional": true
+    },
+    "@deepseek-ai/dsh-api-remotes": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-plugin-manager": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-renderer": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-sidebar-right": {
+      "optional": true
     }
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
-    "@deepseek-ai/dsh": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-client-connection": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-client-locale": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-client-ui-conversation": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-client-ui-layout": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-client-ui-settings-plugins": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-credentials": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-launch-environment": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-mcp-client": "0.1.0-rc.7",
-    "@deepseek-ai/dsh-settings": "0.1.0-rc.7",
-    "@deepseek-ai/schemastery": "3.18.1",
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-api-remotes": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-connection": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-locale": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-credentials": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-launch-environment": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-mcp-client": "0.2.0-rc.2",
+    "@deepseek-ai/schemastery": "3.18.4",
     "@types/node": "^22.18.0",
     "@types/react": "~18.3.1",
     "react": "^18.2.0",

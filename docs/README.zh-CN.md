@@ -9,7 +9,7 @@
 ## 运行要求
 
 - Node.js 22.19 或更高的 Node.js 22 版本，或 Node.js 24+
-- DeepSeek Harness `0.1.0-rc.7` 或 `0.1.0-rc.8`
+- DeepSeek Harness `0.2.0-rc.2` 及以上的 0.2.0 版本
 - OOMOL Hosted 使用 OOMOL 账号；self-hosted 使用已运行的 OpenConnector
 
 ## 安装
@@ -21,7 +21,7 @@ dsh plugin --profile web add -w dsh-oomol
 dsh web
 ```
 
-插件会出现在 **设置 > 插件 > OOMOL Connector**。
+插件会出现在 **插件** 页面，名称为 `dsh-oomol`。打开它即可配置 Connector Key。
 
 ## OOMOL Hosted
 
@@ -38,7 +38,7 @@ dsh web
     failOnStartupError: false
 ```
 
-在 [OOMOL Console](https://console.oomol.com/api-key) 创建 OOMOL MCP API Key，然后保存到插件设置。Harness Credentials 使用 `OOMOL_MCP_API_KEY` 保存它。
+在 [OOMOL Console](https://console.oomol.com/api-key) 创建 OOMOL MCP API Key，然后在插件页面保存。Harness Credentials 使用 `OOMOL_MCP_API_KEY` 保存它。
 
 托管环境可以在启动时提供：
 
@@ -54,7 +54,7 @@ export OOMOL_TEAM_NAME="your-team"
 dsh web
 ```
 
-会话中的 Connections 按钮会打开 Harness 原生面板，用于管理 OOMOL Hosted 账号。
+会话中的 Connections 按钮会在右侧栏打开 Connections 标签页，用于管理 OOMOL Hosted 账号。
 
 ## Self-hosted OpenConnector
 
@@ -74,7 +74,7 @@ export OOMOL_CONNECT_RUNTIME_TOKEN="oct_..."
 dsh web
 ```
 
-也可以在插件设置中保存 Runtime API Key。持久 Runtime Key 由 OpenConnector Console 的 Access 页面创建。
+也可以在插件页面保存 Runtime API Key。持久 Runtime Key 由 OpenConnector Console 的 Access 页面创建。
 
 Self-hosted HTTP endpoint 仅支持 `localhost`、`127.0.0.1` 和 `[::1]`。远程部署使用 HTTPS：
 
@@ -148,12 +148,12 @@ OOMOL Hosted 的 Provider credentials 保存在 OOMOL Connector。Self-hosted �
 
 | 现象 | 处理方式 |
 | --- | --- |
-| 设置中没有插件 | 安装到 `web` profile 并重启 `dsh web` |
-| OOMOL Hosted 显示未配置 | 在插件设置中保存 OOMOL MCP API Key |
+| 插件页面中没有该插件 | 安装到 `web` profile 并重启 `dsh web` |
+| OOMOL Hosted 显示未配置 | 在插件页面保存 OOMOL MCP API Key |
 | Self-hosted 返回未授权 | 保存该 OpenConnector 实例创建的 Runtime API Key |
 | Self-hosted Console 链接返回 404 | 打开 OpenConnector 部署所配置的 Console 地址 |
 | 缺少预期应用 | 在对应 Connector Console 中配置 Provider connection |
-| Connections 面板没有展开 | 将窗口放大到至少 1220 px，以便 Harness 显示详情栏 |
+| 没有出现 Connections 标签页 | 先打开一个会话，Connections 标签页位于该会话的右侧栏 |
 
 运行本地诊断：
 

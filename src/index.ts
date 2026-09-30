@@ -4,11 +4,11 @@ import { credentialRef } from "@deepseek-ai/dsh-credentials"
 import type {} from "@deepseek-ai/dsh-credentials/types"
 import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment"
 import * as mcpClient from "@deepseek-ai/dsh-mcp-client"
-import { settingsNamespace } from "@deepseek-ai/dsh-settings"
 import Schema from "@deepseek-ai/schemastery"
 
 import { createConnectionsRpcHandler } from "./connections.js"
 import { createRepositoryRpcHandler } from "./repository.js"
+import { createOomolFetchRoutes, type OomolRpcHandler } from "./rpc-routes.js"
 import { statusFromMcpError, type OomolConnectionStatus } from "./health.js"
 import {
   DEFAULT_API_KEY_ENV,
@@ -22,7 +22,7 @@ import {
 } from "./runtime.js"
 
 export const name = "oomol"
-export const inject = ["tools", "connection", "settings"]
+export const inject = ["tools"]
 
 export type Config = OomolConnectorConfig
 
@@ -37,7 +37,6 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  ctx.settings.register(settingsNamespace("oomol"), Config, { base: config, applies: "restart" })
   const launchEnvironment = launchEnvironmentOf(ctx)
   const initialConfiguration = resolveConnectorConfiguration(config)
   const apiKeyEnv = initialConfiguration.apiKeyEnv
@@ -59,28 +58,28 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   const handleRepositoryRpc = createRepositoryRpcHandler()
 
-  const handleOomolRpc = async (endpoint: string, payload: unknown, signal: AbortSignal) => {
+  const handleOomolRpc: OomolRpcHandler = async (endpoint, payload, signal) => {
     if (endpoint === "configuration") {
-      const resolved = await resolveConnection()
-      return { ok: true as const, value: initialConfiguration }
+      await resolveConnection()
+      return { ok: true, value: initialConfiguration }
     }
-    if (endpoint === "status") return { ok: true as const, value: status }
+    if (endpoint === "status") return { ok: true, value: status }
     if (endpoint === "test") {
       await reload(false)
-      return { ok: true as const, value: status }
+      return { ok: true, value: status }
     }
-    if (endpoint.startsWith("repository/")) return { ok: true as const, value: await handleRepositoryRpc(endpoint, signal) }
-    if (endpoint.startsWith("connections/")) return { ok: true as const, value: await handleConnectionsRpc(endpoint, payload, signal) }
-    return {
-      ok: false as const,
-      error: { code: "internal" as const, message: "Unknown OOMOL RPC endpoint", details: {} },
-    }
+    if (endpoint.startsWith("repository/")) return { ok: true, value: await handleRepositoryRpc(endpoint, signal) }
+    return { ok: true, value: await handleConnectionsRpc(endpoint, payload, signal) }
   }
 
-  ctx.effect(
-    () => ctx.connection.rpc.handle("/oomol", handleOomolRpc, { authority: "loopback" }),
-    "oomol: loopback RPC",
-  )
+  // Only Web profiles provide the browser connection; MCP tools load without it.
+  ctx.inject(["connection"], (webCtx) => {
+    for (const route of createOomolFetchRoutes(handleOomolRpc, (endpoint, error) => {
+      webCtx.logger.warn(`oomol: ${endpoint} request failed: ${String(error)}`)
+    })) {
+      webCtx.effect(() => webCtx.connection.fetch.register(route), `oomol: ${route.path} route`)
+    }
+  })
 
   const reload = (initial: boolean): Promise<void> => {
     const operation = reloadQueue.catch(() => undefined).then(async () => {
@@ -125,12 +124,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return operation
   }
 
-  await reload(true)
-
-  ctx.on("credentials/updated", (ref) => {
+  // Subscribe before the first connection so a key saved while it runs is not missed.
+  ctx.on("credentials/reference-updated", (ref) => {
     if (String(ref) !== apiKeyEnv) return
     void reload(false)
   })
+
+  await reload(true)
 
   ctx.effect(() => async () => {
     disposed = true

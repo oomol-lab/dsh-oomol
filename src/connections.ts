@@ -2,6 +2,14 @@ import type { ResolvedOomolConnection } from "./runtime.js"
 
 const AUTH_TYPES = ["oauth2", "api_key", "custom_credential", "federated", "no_auth"] as const
 const IDENTIFIER = /^[A-Za-z0-9_-]{1,160}$/
+// Connector exposes virtual no-auth and Marketplace apps in GET /v1/apps. They have no stored app row,
+// so by-id routes (disconnect, reconnect) reject them; only Marketplace ids can become the default.
+const VIRTUAL_APP_ID = /^(?:no_auth:([A-Za-z0-9_-]{1,160})|marketplace:[A-Za-z0-9_-]{1,160}:([A-Za-z0-9_-]{1,160}))$/
+const MARKETPLACE_APP_ID = /^marketplace:[A-Za-z0-9_-]{1,160}:[A-Za-z0-9_-]{1,160}$/
+// OAuth authorization option ids default to native scopes (for example `read:user` or scope URLs).
+const AUTHORIZATION_OPTION_ID = /^[\x21-\x7E]{1,500}$/
+const MAX_AUTHORIZATION_OPTIONS = 64
+const AUTHORIZATION_RISKS = ["standard", "sensitive", "destructive"] as const
 const OAUTH_RETURN_URI = "https://console.oomol.com/app-connections/callback"
 const MAX_CREDENTIAL_BYTES = 512 * 1024
 
@@ -45,6 +53,7 @@ export function createConnectionsRpcHandler(context: ConnectionsRpcContext) {
 
       if (endpoint === "connections/connect") {
         const input = readConnectInput(payload)
+        if (input.authType === "oauth2") await assertAuthorizationSelection(connection, input, signal)
         const path = connectPath(input)
         const body = connectBody(input)
         const response = await requestConnector(connection, path, {
@@ -62,7 +71,6 @@ export function createConnectionsRpcHandler(context: ConnectionsRpcContext) {
         const appId = readIdentifier(payload, "appId")
         await requestConnector(connection, `/v1/apps/by-id/${encodeURIComponent(appId)}`, {
           method: "DELETE",
-          body: null,
           signal,
         })
         return { ok: true as const, value: { disconnected: true } }
@@ -70,7 +78,7 @@ export function createConnectionsRpcHandler(context: ConnectionsRpcContext) {
 
       if (endpoint === "connections/set-default") {
         const service = readIdentifier(payload, "service")
-        const appId = readIdentifier(payload, "appId")
+        const appId = readDefaultAppId(payload, service)
         const response = await requestConnector(
           connection,
           `/v1/apps/services/${encodeURIComponent(service)}/default`,
@@ -102,17 +110,38 @@ export interface ConnectInput {
   values?: Record<string, string>
   extra?: Record<string, string>
   comment?: string
-  authorizationScopes?: string[]
+  authorizationOptionIds?: string[]
+}
+
+/**
+ * Connector grants every declared authorization option when a request omits
+ * the selection, so the Host checks the Provider itself instead of trusting a
+ * possibly stale or filtered client view.
+ */
+async function assertAuthorizationSelection(
+  connection: ResolvedOomolConnection,
+  input: ConnectInput,
+  signal: AbortSignal,
+): Promise<void> {
+  if (input.authorizationOptionIds) return
+  const provider = recordOf(dataOf(
+    await requestConnector(connection, `/v1/providers/${encodeURIComponent(input.service)}`, { signal }),
+  ))
+  const declared = recordOf(provider?.oauthClientConfig)?.authorizationOptions
+  if (Array.isArray(declared) && declared.length > 0) {
+    throw new ConnectionsRequestError("invalid_request", "Select the OAuth authorization options first.")
+  }
 }
 
 function connectPath(input: ConnectInput): string {
+  // Connector only has a service-scoped no-auth route with create-or-reuse semantics.
+  if (input.authType === "no_auth") return `/v1/apps/${encodeURIComponent(input.service)}/connect/no-auth`
   const root = input.appId
     ? `/v1/apps/by-id/${encodeURIComponent(input.appId)}/connect`
     : `/v1/apps/${encodeURIComponent(input.service)}/connect`
   if (input.authType === "oauth2") return root
   if (input.authType === "api_key") return `${root}/api-key`
   if (input.authType === "custom_credential") return `${root}/custom-credential`
-  if (input.authType === "no_auth") return `${root}/no-auth`
   throw new ConnectionsRequestError("unsupported", "Federated connections are not available in this preview.")
 }
 
@@ -120,7 +149,7 @@ function connectBody(input: ConnectInput): unknown {
   if (input.authType === "oauth2") {
     return {
       returnUri: OAUTH_RETURN_URI,
-      ...(input.authorizationScopes ? { authorizationScopes: input.authorizationScopes } : {}),
+      ...(input.authorizationOptionIds ? { authorizationOptionIds: input.authorizationOptionIds } : {}),
     }
   }
   if (input.authType === "api_key") {
@@ -164,9 +193,11 @@ async function requestConnector(
   }
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new ConnectionsRequestError("unauthorized", "The OOMOL MCP key is invalid or lacks access.")
     }
+    // Connector answers 403 when the key is valid but the team role cannot manage connections.
+    if (response.status === 403) throw new ConnectionsRequestError("forbidden", "The team role cannot manage connections.")
     if (response.status === 429) throw new ConnectionsRequestError("rate_limited", "OOMOL rate limited the request.")
     if (response.status >= 500) throw new ConnectionsRequestError("unavailable", "OOMOL Connections is temporarily unavailable.")
     throw new ConnectionsRequestError("request_failed", `OOMOL rejected the request (${response.status}).`)
@@ -189,7 +220,14 @@ function readConnectInput(payload: unknown): ConnectInput {
   const apiKey = optionalString(source.apiKey, "apiKey", MAX_CREDENTIAL_BYTES)
   const values = optionalStringRecord(source.values, "values")
   const extra = optionalStringRecord(source.extra, "extra")
-  const authorizationScopes = optionalStringArray(source.authorizationScopes, "authorizationScopes")
+  // Connector silently drops the retired field and would then request every option, so refuse it.
+  if (Object.hasOwn(source, "authorizationScopes")) {
+    throw new ConnectionsRequestError("invalid_request", "authorizationScopes is no longer supported.")
+  }
+  const authorizationOptionIds = optionalAuthorizationOptionIds(source.authorizationOptionIds)
+  if (authorizationOptionIds && authType !== "oauth2") {
+    throw new ConnectionsRequestError("invalid_request", "Authorization options require OAuth.")
+  }
   const secretSize = JSON.stringify({ apiKey, values, extra }).length
   if (secretSize > MAX_CREDENTIAL_BYTES) {
     throw new ConnectionsRequestError("invalid_request", "Credential payload is too large.")
@@ -202,7 +240,7 @@ function readConnectInput(payload: unknown): ConnectInput {
     ...(apiKey ? { apiKey } : {}),
     ...(values ? { values } : {}),
     ...(extra ? { extra } : {}),
-    ...(authorizationScopes ? { authorizationScopes } : {}),
+    ...(authorizationOptionIds ? { authorizationOptionIds } : {}),
   }
 }
 
@@ -251,7 +289,7 @@ function sanitizeProviderDetail(value: unknown) {
           configured: oauthConfig.configured === true,
           clientConfigPolicy: oauthConfig.clientConfigPolicy === "user_required" ? "user_required" : "default_only",
           nextConnectSource: optionalPlainString(oauthConfig.nextConnectSource, 40) ?? "unconfigured",
-          authorizationScopeSelection: sanitizeScopeSelection(oauthConfig.authorizationScopeSelection),
+          ...sanitizeAuthorizationOptions(oauthConfig.authorizationOptions),
         }
       : null,
   }
@@ -274,30 +312,35 @@ function sanitizeFields(value: unknown, allowOptionalSecret: boolean) {
   }).filter(isPresent)
 }
 
-function sanitizeScopeSelection(value: unknown) {
-  const source = recordOf(value)
-  if (!source || !Array.isArray(source.options)) return undefined
-  return {
-    requiredInRequest: source.requiredInRequest === true,
-    options: source.options.map((option) => {
-      const item = recordOf(option)
-      const scope = optionalPlainString(item?.value, 500)
-      if (!item || !scope) return undefined
-      return {
-        value: scope,
-        required: item.required === true,
-        defaultSelected: item.defaultSelected === true,
-        risk: ["standard", "sensitive", "destructive"].includes(String(item.risk)) ? String(item.risk) : "standard",
-      }
-    }).filter(isPresent),
-  }
+function sanitizeAuthorizationOptions(value: unknown) {
+  if (!Array.isArray(value)) return {}
+  const seen = new Set<string>()
+  const options = value.slice(0, MAX_AUTHORIZATION_OPTIONS).map((option) => {
+    const item = recordOf(option)
+    const id = safeAuthorizationOptionId(item?.id)
+    if (!item || !id || seen.has(id)) return undefined
+    seen.add(id)
+    const requires = Array.isArray(item.requires)
+      ? [...new Set(item.requires.map(safeAuthorizationOptionId).filter(isPresent))].filter((requiredId) => requiredId !== id)
+      : []
+    return {
+      id,
+      label: optionalPlainString(item.label, 200) ?? id,
+      description: optionalPlainString(item.description, 1_000),
+      required: item.required === true,
+      defaultSelected: item.defaultSelected === true,
+      risk: AUTHORIZATION_RISKS.find((risk) => risk === item.risk) ?? "standard",
+      ...(requires.length ? { requires } : {}),
+    }
+  }).filter(isPresent)
+  return options.length ? { authorizationOptions: options } : {}
 }
 
 function sanitizeApp(value: unknown) {
   const source = recordOf(value)
   if (!source) return undefined
-  const id = safeIdentifier(source.id)
   const service = safeIdentifier(source.service)
+  const id = service ? safeAppId(source.id, service) : undefined
   if (!id || !service) return undefined
   const status = ["active", "reauth_required", "error", "disconnected"].includes(String(source.status))
     ? String(source.status)
@@ -312,6 +355,7 @@ function sanitizeApp(value: unknown) {
     authType: authTypeOrUndefined(source.authType) ?? null,
     status,
     isDefault: source.isDefault === true,
+    providerScopes: optionalScopeList(source.providerScopes),
     createdAt: finiteNumber(source.createdAt),
     updatedAt: finiteNumber(source.updatedAt),
   }
@@ -335,6 +379,12 @@ function readIdentifier(payload: unknown, key: string): string {
   return identifierValue(requiredRecord(payload)[key], key)
 }
 
+function readDefaultAppId(payload: unknown, service: string): string {
+  const value = requiredRecord(payload).appId
+  if (typeof value === "string" && MARKETPLACE_APP_ID.test(value) && value.endsWith(`:${service}`)) return value
+  return identifierValue(value, "appId")
+}
+
 function requiredRecord(value: unknown): JsonRecord {
   const record = recordOf(value)
   if (!record) throw new ConnectionsRequestError("invalid_request", "Invalid OOMOL Connections request.")
@@ -353,6 +403,17 @@ function identifierValue(value: unknown, key: string): string {
 
 function safeIdentifier(value: unknown): string | undefined {
   return typeof value === "string" && IDENTIFIER.test(value) ? value : undefined
+}
+
+function safeAppId(value: unknown, service: string): string | undefined {
+  if (typeof value !== "string") return undefined
+  if (IDENTIFIER.test(value)) return value
+  const match = VIRTUAL_APP_ID.exec(value)
+  return match && (match[1] ?? match[2]) === service ? value : undefined
+}
+
+function safeAuthorizationOptionId(value: unknown): string | undefined {
+  return typeof value === "string" && AUTHORIZATION_OPTION_ID.test(value) ? value : undefined
 }
 
 function authTypeValue(value: unknown): AuthType {
@@ -392,12 +453,18 @@ function optionalStringRecord(value: unknown, key: string): Record<string, strin
   return result
 }
 
-function optionalStringArray(value: unknown, key: string): string[] | undefined {
+function optionalAuthorizationOptionIds(value: unknown): string[] | undefined {
   if (value === undefined || value === null) return undefined
-  if (!Array.isArray(value) || value.length > 256 || value.some((item) => typeof item !== "string" || item.length > 500)) {
-    throw new ConnectionsRequestError("invalid_request", `Invalid ${key}.`)
+  if (!Array.isArray(value) || value.length > MAX_AUTHORIZATION_OPTIONS
+    || value.some((item) => safeAuthorizationOptionId(item) === undefined)) {
+    throw new ConnectionsRequestError("invalid_request", "Invalid authorizationOptionIds.")
   }
-  return [...new Set(value)]
+  return [...new Set(value as string[])]
+}
+
+function optionalScopeList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return [...new Set(value.slice(0, 256).map(safeAuthorizationOptionId).filter(isPresent))]
 }
 
 function optionalPlainString(value: unknown, maxLength: number): string | undefined {

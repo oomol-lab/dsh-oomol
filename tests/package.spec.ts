@@ -25,7 +25,7 @@ describe("package safety", () => {
     expect(manifest.exports).toHaveProperty("./client")
   })
 
-  it("bounds preview Harness peers to the verified rc.7 and rc.8 contracts", async () => {
+  it("bounds preview Harness peers to the verified 0.2.0 contract", async () => {
     const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
       peerDependencies?: Record<string, string>
     }
@@ -34,21 +34,22 @@ describe("package safety", () => {
 
     expect(harnessPeers.length).toBeGreaterThan(0)
     for (const [, range] of harnessPeers) {
-      expect(range).toBe(">=0.1.0-rc.7 <0.1.0-rc.9")
+      expect(range).toBe(">=0.2.0-rc.2 <0.2.1")
     }
   })
 
-  it("registers the settings card with the keyed-slot contract", async () => {
+  it("registers the configuration page under the bundle's package name", async () => {
     const client = await readFile(resolve(root, "src/client/index.tsx"), "utf8")
+    const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as { name: string }
 
-    expect(client).toContain('const SETTINGS_NAMESPACE = "oomol"')
+    expect(client).toContain(`const PACKAGE_NAME = ${JSON.stringify(manifest.name)}`)
     const registration = client.match(
-      /ctx\.slots\.inject\("settings\.plugin\.item",\s*\(\)\s*=>\s*ctx\.slots\.register\(\{([\s\S]*?)\},\s*OomolSettingsCard\)\)/,
+      /ctx\.slots\.inject\("plugins\.bundle\.config",\s*\(\)\s*=>\s*ctx\.slots\.register\(\{([\s\S]*?)\},\s*OomolSettingsCard\)\)/,
     )?.[1]
 
     expect(registration).toBeDefined()
-    expect(registration).toMatch(/name:\s*"settings\.plugin\.item"/)
-    expect(registration).toMatch(/key:\s*SETTINGS_NAMESPACE/)
+    expect(registration).toMatch(/name:\s*"plugins\.bundle\.config"/)
+    expect(registration).toMatch(/key:\s*PACKAGE_NAME/)
     expect(registration).not.toMatch(/\bid\s*:/)
   })
 

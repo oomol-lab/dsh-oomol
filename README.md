@@ -9,7 +9,7 @@ Use OOMOL Connector Actions from DeepSeek Harness through progressive MCP discov
 ## Requirements
 
 - Node.js 22.19 or later within Node.js 22, or Node.js 24+
-- DeepSeek Harness `0.1.0-rc.7` or `0.1.0-rc.8`
+- DeepSeek Harness `0.2.0-rc.2` or later within 0.2.0
 - An OOMOL account for OOMOL Hosted, or a running OpenConnector instance for self-hosted use
 
 ## Install
@@ -21,7 +21,7 @@ dsh plugin --profile web add -w dsh-oomol
 dsh web
 ```
 
-The plugin appears under **Settings > Plugins > OOMOL Connector**.
+The plugin appears on the **Plugins** page as `dsh-oomol`. Open it to configure the Connector key.
 
 ## OOMOL Hosted
 
@@ -38,7 +38,7 @@ The package connects to OOMOL Hosted by default:
     failOnStartupError: false
 ```
 
-Create an OOMOL MCP API key in [OOMOL Console](https://console.oomol.com/api-key), then save it in the plugin settings. Harness Credentials stores the key under `OOMOL_MCP_API_KEY`.
+Create an OOMOL MCP API key in [OOMOL Console](https://console.oomol.com/api-key), then save it on the plugin page. Harness Credentials stores the key under `OOMOL_MCP_API_KEY`.
 
 Managed environments can provide it at launch:
 
@@ -74,7 +74,7 @@ export OOMOL_CONNECT_RUNTIME_TOKEN="oct_..."
 dsh web
 ```
 
-You can also save the runtime API key in the plugin settings. Create persistent runtime keys in the OpenConnector Console Access page.
+You can also save the runtime API key on the plugin page. Create persistent runtime keys in the OpenConnector Console Access page.
 
 Self-hosted HTTP endpoints are limited to `localhost`, `127.0.0.1`, and `[::1]`. Remote deployments use HTTPS:
 
@@ -148,12 +148,12 @@ Derived credential references:
 
 | Symptom | Action |
 | --- | --- |
-| Plugin missing from Settings | Install it in the `web` profile and restart `dsh web` |
-| OOMOL Hosted shows Not configured | Save an OOMOL MCP API key in plugin settings |
+| Plugin missing from the Plugins page | Install it in the `web` profile and restart `dsh web` |
+| OOMOL Hosted shows Not configured | Save an OOMOL MCP API key on the plugin page |
 | Self-hosted returns Unauthorized | Save a runtime API key created by that OpenConnector instance |
 | Self-hosted Console link returns 404 | Open the Console URL configured by the OpenConnector deployment |
 | Expected app is missing | Open the relevant Connector Console and configure the Provider connection |
-| Connections panel stays closed | Widen the window to at least 1220 px so Harness can show its details column |
+| Connections tab does not appear | Open a Session first; the Connections tab lives in that Session's right sidebar |
 
 Run local diagnostics:
 
