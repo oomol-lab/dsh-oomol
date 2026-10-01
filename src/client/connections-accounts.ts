@@ -37,3 +37,13 @@ export function deriveProviderConnectionState<T extends ConnectionAccountSummary
   if (hasAmbiguousDefault(candidates)) return "ambiguous"
   return pickStatusAccount(candidates)?.status === "active" ? "connected" : "needs_attention"
 }
+
+/** Connector lists public no-auth and Marketplace access as virtual apps without a stored app row. */
+export function isVirtualAccount(app: Pick<ConnectionAccountSummary, "id">): boolean {
+  return app.id.startsWith("no_auth:") || isMarketplaceAccount(app)
+}
+
+/** Marketplace virtual apps can become the default but cannot be reconnected or disconnected. */
+export function isMarketplaceAccount(app: Pick<ConnectionAccountSummary, "id">): boolean {
+  return app.id.startsWith("marketplace:")
+}

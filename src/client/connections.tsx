@@ -1,6 +1,5 @@
-import type { ConnectionHandle } from "@deepseek-ai/dsh-client-connection/client"
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client"
-import type { ILayout } from "@deepseek-ai/dsh-client-ui-layout/client"
+import type {} from "@deepseek-ai/dsh-client-ui-sidebar-right/client"
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots"
 import {
   useCallback,
@@ -18,10 +17,20 @@ import { ConnectionsListRequests } from "./connections-controller.js"
 import {
   deriveProviderConnectionState,
   hasAmbiguousDefault,
+  isMarketplaceAccount,
+  isVirtualAccount,
   pickDefaultOrSingleAccount,
 } from "./connections-accounts.js"
+import type { OomolApi } from "./oomol-api.js"
+import {
+  createInitialAuthorizationOptionIds,
+  updateAuthorizationOptionIds,
+  type AuthorizationOption,
+} from "./connections-authorization-options.js"
 
 export const CONNECTIONS_NS = "oomol.connections"
+export const CONNECTIONS_TAB_ID = "dsh-oomol/connections"
+export const CONNECTIONS_TAB_KIND = "oomol-connections"
 
 type AuthType = "oauth2" | "api_key" | "custom_credential" | "federated" | "no_auth"
 
@@ -68,6 +77,9 @@ type ConnectionsLocaleKey =
   | "comment"
   | "required"
   | "permissions"
+  | "riskSensitive"
+  | "riskDestructive"
+  | "destructiveWarning"
   | "oauthPopup"
   | "oauthWaiting"
   | "oauthBlocked"
@@ -87,6 +99,7 @@ type ConnectionsLocaleKey =
   | "errorCancelled"
   | "errorUnavailable"
   | "errorUnauthorized"
+  | "errorForbidden"
   | "errorRateLimited"
   | "errorRequestFailed"
   | "errorInvalidResponse"
@@ -102,7 +115,7 @@ declare module "@deepseek-ai/dsh-client-ui-slots" {
 
 export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   open: "Connections",
-  narrowViewportHint: "Manage Connector connections. Widen the window to open this panel.",
+  narrowViewportHint: "Manage OOMOL app connections and accounts.",
   title: "OOMOL Connections",
   subtitle: "{count} available apps",
   close: "Close",
@@ -143,6 +156,9 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   comment: "Connection note (optional)",
   required: "Required",
   permissions: "Permissions",
+  riskSensitive: "Sensitive",
+  riskDestructive: "Destructive",
+  destructiveWarning: "A selected permission allows irreversible changes, such as deleting data. Grant it only if you need it.",
   oauthPopup: "Continue in the authorization window.",
   oauthWaiting: "Waiting for authorization to finish…",
   oauthBlocked: "The authorization window was blocked. Allow popups and try again.",
@@ -150,7 +166,7 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   connectedSuccess: "Connection saved.",
   defaultUpdated: "Default connection updated.",
   disconnectedSuccess: "Connection removed.",
-  configureFirst: "Configure and test an OOMOL MCP key in Settings first.",
+  configureFirst: "Configure and test an OOMOL MCP key in Plugins > OOMOL Connector first.",
   tryAgain: "Try again",
   openConsole: "Open full Console",
   viewOnGitHub: "View open-connector on GitHub",
@@ -162,6 +178,7 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
   errorCancelled: "The request was cancelled.",
   errorUnavailable: "OOMOL Connections is temporarily unavailable. Try again later.",
   errorUnauthorized: "The OOMOL MCP key is invalid or does not have access.",
+  errorForbidden: "This team role cannot manage connections. Ask a team admin or use OOMOL Console.",
   errorRateLimited: "Too many requests. Wait a moment and try again.",
   errorRequestFailed: "OOMOL could not complete the request.",
   errorInvalidResponse: "OOMOL returned an unexpected response.",
@@ -172,7 +189,7 @@ export const connectionsEn: Record<ConnectionsLocaleKey, string> = {
 
 export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   open: "连接",
-  narrowViewportHint: "管理 Connector 连接。放大窗口后可打开此面板。",
+  narrowViewportHint: "管理 OOMOL 应用连接与账号。",
   title: "OOMOL 连接中心",
   subtitle: "{count} 个可用应用",
   close: "关闭",
@@ -213,6 +230,9 @@ export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   comment: "连接备注（可选）",
   required: "必填",
   permissions: "权限",
+  riskSensitive: "敏感",
+  riskDestructive: "高危",
+  destructiveWarning: "已选择的权限允许执行不可撤销的操作，例如删除数据。请仅在确有需要时授予。",
   oauthPopup: "请在弹出的授权窗口中继续。",
   oauthWaiting: "正在等待授权完成…",
   oauthBlocked: "授权窗口被浏览器拦截，请允许弹窗后重试。",
@@ -220,7 +240,7 @@ export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   connectedSuccess: "连接已保存。",
   defaultUpdated: "默认连接已更新。",
   disconnectedSuccess: "连接已断开。",
-  configureFirst: "请先在设置中配置并测试 OOMOL MCP Key。",
+  configureFirst: "请先在 插件 > OOMOL Connector 中配置并测试 OOMOL MCP Key。",
   tryAgain: "重试",
   openConsole: "打开完整控制台",
   viewOnGitHub: "在 GitHub 上查看 open-connector",
@@ -232,6 +252,7 @@ export const connectionsZh: Record<ConnectionsLocaleKey, string> = {
   errorCancelled: "请求已取消。",
   errorUnavailable: "OOMOL 连接服务暂时不可用，请稍后重试。",
   errorUnauthorized: "OOMOL MCP Key 无效或没有访问权限。",
+  errorForbidden: "当前团队角色无法管理连接，请联系团队管理员或使用 OOMOL Console。",
   errorRateLimited: "请求过于频繁，请稍后重试。",
   errorRequestFailed: "OOMOL 暂时无法完成这个请求。",
   errorInvalidResponse: "OOMOL 返回了无法识别的数据。",
@@ -269,15 +290,7 @@ interface ProviderDetail extends ProviderListItem {
     configured: boolean
     clientConfigPolicy: "user_required" | "default_only"
     nextConnectSource: string
-    authorizationScopeSelection?: {
-      requiredInRequest: boolean
-      options: Array<{
-        value: string
-        required: boolean
-        defaultSelected: boolean
-        risk: string
-      }>
-    }
+    authorizationOptions?: AuthorizationOption[]
   } | null
 }
 
@@ -291,6 +304,7 @@ interface ConnectedApp {
   authType: AuthType | null
   status: string
   isDefault: boolean
+  providerScopes?: string[]
   createdAt?: number
   updatedAt?: number
 }
@@ -363,7 +377,7 @@ export class ConnectionsController {
 }
 
 type HeaderProps = PropsRuntime<"conversation.session.header.utilities"> & PropsLocale<typeof CONNECTIONS_NS>
-type DetailsProps = PropsRuntime<"details"> & PropsLocale<typeof CONNECTIONS_NS>
+type DetailsProps = PropsRuntime<"sidebar.right.pane.tab"> & PropsLocale<typeof CONNECTIONS_NS>
 
 interface ConnectorConfiguration {
   connectionsManagement: "embedded" | "external"
@@ -371,16 +385,16 @@ interface ConnectorConfiguration {
 }
 
 export function createConnectionsComponents(
-  connection: ConnectionHandle,
+  api: OomolApi,
   controller: ConnectionsController,
-  layout: ILayout,
+  openPanel: () => void,
 ) {
   function ConnectionsHeaderButton({ t }: HeaderProps) {
     const [configuration, setConfiguration] = useState<ConnectorConfiguration>()
 
     useEffect(() => {
       let active = true
-      void connection.rpc.call("/oomol", "configuration", {})
+      void api.call("configuration")
         .then((response) => {
           if (active && response.ok && isConnectorConfiguration(response.value)) {
             setConfiguration(response.value)
@@ -402,8 +416,7 @@ export function createConnectionsComponents(
             window.open(configuration.consoleUrl, "_blank", "noopener,noreferrer")
             return
           }
-          controller.requestList()
-          layout.openDetails()
+          openPanel()
         }}
       >
         <OomolMark size={17} />
@@ -412,13 +425,15 @@ export function createConnectionsComponents(
     )
   }
 
-  function ConnectionsDetails({ t }: DetailsProps) {
+  function ConnectionsDetails({ t, useTabInfo }: DetailsProps) {
+    const { tab } = useTabInfo()
+    useEffect(() => { controller.requestList() }, [])
     return (
       <ConnectionsPanel
-        connection={connection}
+        api={api}
         controller={controller}
         t={t}
-        onClose={() => { layout.closeDetails() }}
+        onClose={() => { tab.actions.close() }}
       />
     )
   }
@@ -435,12 +450,12 @@ function isConnectorConfiguration(value: unknown): value is ConnectorConfigurati
 }
 
 function ConnectionsPanel({
-  connection,
+  api,
   controller,
   t,
   onClose,
 }: {
-  connection: ConnectionHandle
+  api: OomolApi
   controller: ConnectionsController
   t: (key: ConnectionsLocaleKey, params?: Record<string, unknown>) => string
   onClose: () => void
@@ -462,12 +477,12 @@ function ConnectionsPanel({
   useEffect(() => () => { alive.current = false }, [])
 
   const call = useCallback(async <T,>(endpoint: string, payload: unknown): Promise<T> => {
-    const response = await connection.rpc.call("/oomol", endpoint, payload)
+    const response = await api.call(endpoint, payload)
     if (!response.ok) throw new Error(t("errorUnknown"))
     const result = domainResultOf<T>(response.value)
     if (!result.ok) throw new Error(t(localeKeyForConnectionsReason(result.error.reason)))
     return result.value
-  }, [connection, t])
+  }, [api, t])
 
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -709,6 +724,7 @@ function ProviderView({
     [manageableApps],
   )
   const selectedApp = manageableApps.find((app) => app.id === selectedAppId) ?? null
+  const selectedVirtual = selectedApp ? isVirtualAccount(selectedApp) : false
   const ambiguous = hasAmbiguousDefault(manageableApps)
 
   useEffect(() => {
@@ -823,15 +839,17 @@ function ProviderView({
                     ) : null}
                   </div>
                   <div style={styles.accountActions}>
-                    <button type="button" style={styles.compactSecondaryButton} disabled={disconnecting !== null || settingDefault} onClick={() => setReconnecting((current) => !current)}>
-                      {reconnecting ? t("cancel") : t("reconnect")}
-                    </button>
-                    {!selectedApp.isDefault ? (
+                    {!selectedVirtual ? (
+                      <button type="button" style={styles.compactSecondaryButton} disabled={disconnecting !== null || settingDefault} onClick={() => setReconnecting((current) => !current)}>
+                        {reconnecting ? t("cancel") : t("reconnect")}
+                      </button>
+                    ) : null}
+                    {!selectedApp.isDefault && (!selectedVirtual || isMarketplaceAccount(selectedApp)) ? (
                       <button type="button" style={styles.compactSecondaryButton} disabled={settingDefault || disconnecting !== null} onClick={() => { void setDefault(selectedApp) }}>
                         {settingDefault ? t("settingDefault") : t("setDefault")}
                       </button>
                     ) : null}
-                    {confirming === selectedApp.id ? (
+                    {selectedVirtual ? null : confirming === selectedApp.id ? (
                       <>
                         <button type="button" style={styles.dangerButton} disabled={disconnecting === selectedApp.id} onClick={() => { void disconnect(selectedApp) }}>
                           {disconnecting === selectedApp.id ? t("disconnecting") : t("confirmDisconnect")}
@@ -851,7 +869,7 @@ function ProviderView({
             </section>
           ) : null}
 
-          {reconnecting && selectedApp ? (
+          {reconnecting && selectedApp && !selectedVirtual ? (
             <section style={styles.section}>
               <div style={styles.sectionTitle}>{t("reconnect")}</div>
               <ConnectionForm
@@ -919,8 +937,10 @@ function ConnectionForm({
   const [comment, setComment] = useState("")
   const [busy, setBusy] = useState(false)
   const [oauthWaiting, setOauthWaiting] = useState(false)
-  const scopeOptions = provider.oauthClientConfig?.authorizationScopeSelection?.options ?? []
-  const [scopes, setScopes] = useState<string[]>(() => scopeOptions.filter((item) => item.required || item.defaultSelected).map((item) => item.value))
+  const authorizationOptions = provider.oauthClientConfig?.authorizationOptions
+  const currentScopes = app?.authType === "oauth2" ? app.providerScopes : undefined
+  const [optionIds, setOptionIds] = useState<string[]>(() => createInitialAuthorizationOptionIds(authorizationOptions, currentScopes))
+  const destructiveSelected = authorizationOptions?.some((option) => option.risk === "destructive" && optionIds.includes(option.id)) ?? false
   const fields = authType === "api_key"
     ? provider.apiKeyConfig?.extraFields ?? []
     : authType === "custom_credential"
@@ -937,6 +957,14 @@ function ConnectionForm({
     setOauthWaiting(false)
     onError(null)
   }, [app?.id, authType])
+
+  // Compare by value so a background list or Provider refresh does not discard the user's selection.
+  const authorizationOptionsKey = JSON.stringify(authorizationOptions ?? null)
+  const currentScopesKey = JSON.stringify(currentScopes ?? null)
+  useEffect(() => {
+    // A refetched Provider may declare different options; stale ids would be rejected by Connector.
+    setOptionIds(createInitialAuthorizationOptionIds(authorizationOptions, currentScopes))
+  }, [app?.id, authorizationOptionsKey, currentScopesKey])
 
   const connect = async (event: FormEvent) => {
     event.preventDefault()
@@ -961,7 +989,8 @@ function ConnectionForm({
         authType,
         ...(authType === "api_key" ? { apiKey, extra: values } : {}),
         ...(authType === "custom_credential" ? { values } : {}),
-        ...(authType === "oauth2" && scopeOptions.length ? { authorizationScopes: scopes } : {}),
+        // Connector selects every option when the field is omitted, so always send the explicit selection.
+        ...(authType === "oauth2" && authorizationOptions?.length ? { authorizationOptionIds: optionIds } : {}),
         ...(comment.trim() ? { comment: comment.trim() } : {}),
       })
       if (result.authorizationUrl) {
@@ -1019,20 +1048,29 @@ function ConnectionForm({
         </Field>
       ))}
 
-      {authType === "oauth2" && scopeOptions.length ? (
+      {authType === "oauth2" && authorizationOptions?.length ? (
         <fieldset style={styles.scopeFieldset}>
           <legend style={styles.fieldLabel}>{t("permissions")}</legend>
-          {scopeOptions.map((option) => (
-            <label key={option.value} style={styles.scopeOption}>
+          {authorizationOptions.map((option) => (
+            <label key={option.id} style={styles.scopeOption}>
               <input
                 type="checkbox"
-                checked={option.required || scopes.includes(option.value)}
+                checked={option.required || optionIds.includes(option.id)}
                 disabled={option.required}
-                onChange={(event) => setScopes((current) => event.target.checked ? [...new Set([...current, option.value])] : current.filter((scope) => scope !== option.value))}
+                onChange={(event) => setOptionIds((current) => updateAuthorizationOptionIds(authorizationOptions, current, option.id, event.target.checked))}
               />
-              <span>{option.value}{option.required ? ` (${t("required")})` : ""}</span>
+              <span style={styles.scopeCopy}>
+                <span style={styles.scopeLabel}>
+                  {option.label}
+                  {option.required ? <span style={styles.scopeTag}>{t("required")}</span> : null}
+                  {option.risk === "sensitive" ? <span style={styles.scopeTagWarning}>{t("riskSensitive")}</span> : null}
+                  {option.risk === "destructive" ? <span style={styles.scopeTagDanger}>{t("riskDestructive")}</span> : null}
+                </span>
+                {option.description ? <span style={styles.fieldDescription}>{option.description}</span> : null}
+              </span>
             </label>
           ))}
+          {destructiveSelected ? <div role="alert" style={styles.dangerNotice}>{t("destructiveWarning")}</div> : null}
         </fieldset>
       ) : null}
 
@@ -1144,6 +1182,8 @@ function authTypeLabel(type: AuthType, t: (key: ConnectionsLocaleKey) => string)
 }
 
 function accountPrimaryLabel(app: ConnectedApp) {
+  // Virtual apps carry a machine alias (for example `marketplace_oomol`); show their label instead.
+  if (isVirtualAccount(app)) return app.accountLabel || app.displayName || app.id
   return app.alias || app.accountLabel || app.providerAccountId || app.displayName || app.id
 }
 
@@ -1164,6 +1204,7 @@ function localeKeyForConnectionsReason(reason: string): ConnectionsLocaleKey {
   if (reason === "cancelled") return "errorCancelled"
   if (reason === "unavailable") return "errorUnavailable"
   if (reason === "unauthorized") return "errorUnauthorized"
+  if (reason === "forbidden") return "errorForbidden"
   if (reason === "rate_limited") return "errorRateLimited"
   if (reason === "request_failed") return "errorRequestFailed"
   if (reason === "invalid_response") return "errorInvalidResponse"
@@ -1312,6 +1353,12 @@ const styles: Record<string, CSSProperties> = {
   input: { width: "100%", boxSizing: "border-box", border, borderRadius: 9, padding: "9px 10px", background: surface, color: "inherit", outline: "none", font: "inherit", fontSize: 12 },
   scopeFieldset: { border, borderRadius: 9, padding: 10, display: "grid", gap: 7, margin: 0 },
   scopeOption: { display: "flex", alignItems: "flex-start", gap: 8, fontSize: 11, color: muted, overflowWrap: "anywhere" },
+  scopeCopy: { minWidth: 0, display: "grid", gap: 2 },
+  scopeLabel: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, color: primary, fontWeight: 600 },
+  scopeTag: { color: muted, border, borderRadius: 999, padding: "0 6px", fontSize: 9, fontWeight: 500 },
+  scopeTagWarning: { color: warning, background: warningSurface, borderRadius: 999, padding: "0 6px", fontSize: 9, fontWeight: 500 },
+  scopeTagDanger: { color: danger, background: "var(--dsw-alias-interactive-bg-hover-danger, rgba(242,90,90,.08))", borderRadius: 999, padding: "0 6px", fontSize: 9, fontWeight: 500 },
+  dangerNotice: { border, borderRadius: 9, padding: 10, background: "var(--dsw-alias-interactive-bg-hover-danger, rgba(242,90,90,.08))", color: danger, fontSize: 11, lineHeight: "16px" },
   notice: { border, borderRadius: 9, padding: 10, background: warningSurface, color: warning, fontSize: 11, lineHeight: "16px" },
   waiting: { display: "flex", alignItems: "center", gap: 8, color: muted, fontSize: 11 },
   spinner: { width: 12, height: 12, border: "2px solid var(--dsw-alias-border-l2, rgba(38,49,72,.12))", borderTopColor: business, borderRadius: 999, animation: "spin 1s linear infinite" },
