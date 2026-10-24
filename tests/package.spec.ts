@@ -25,7 +25,7 @@ describe("package safety", () => {
     expect(manifest.exports).toHaveProperty("./client")
   })
 
-  it("bounds preview Harness peers to the verified 0.2.1 contract", async () => {
+  it("bounds preview Harness peers to the verified 0.2.0-rc.2 through 0.2.1 range", async () => {
     const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
       peerDependencies?: Record<string, string>
     }
@@ -34,7 +34,7 @@ describe("package safety", () => {
 
     expect(harnessPeers.length).toBeGreaterThan(0)
     for (const [, range] of harnessPeers) {
-      expect(range).toBe(">=0.2.1-rc.3 <0.2.2")
+      expect(range).toBe(">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.2.2-0")
     }
   })
 
