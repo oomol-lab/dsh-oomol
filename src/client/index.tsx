@@ -50,6 +50,7 @@ type LocaleKey =
   | "readOnly"
   | "saved"
   | "removed"
+  | "removedFallback"
   | "failed"
   | "unsaved"
   | "links"
@@ -123,6 +124,7 @@ const en: Record<LocaleKey, string> = {
   readOnly: "This key comes from a read-only source such as the launch environment. Change it at that source.",
   saved: "Key saved. The Connector client is reloading.",
   removed: "Key removed. OOMOL tools will be unloaded.",
+  removedFallback: "Saved key removed. The launch environment still provides a key, so OOMOL tools stay loaded.",
   failed: "The operation failed. Check the Harness logs and credential source.",
   unsaved: "Unsaved",
   links: "OOMOL Console",
@@ -163,6 +165,7 @@ const zh: Record<LocaleKey, string> = {
   readOnly: "当前 Key 来自启动环境等只读来源，请在对应来源中修改。",
   saved: "Key 已保存，Connector 客户端正在重新加载。",
   removed: "Key 已删除，OOMOL 工具将被卸载。",
+  removedFallback: "已删除保存的 Key，启动环境仍提供 Key，OOMOL 工具保持加载。",
   failed: "操作失败，请检查 Harness 日志和凭据来源。",
   unsaved: "未保存",
   links: "OOMOL 控制台",
@@ -193,9 +196,9 @@ export function apply(ctx: ClientContext): void {
     const [editingKey, setEditingKey] = useState(false)
     const [busy, setBusy] = useState(false)
     const [testing, setTesting] = useState(false)
-    const [message, setMessage] = useState<"saved" | "removed" | "failed" | undefined>()
+    const [message, setMessage] = useState<"saved" | "removed" | "removedFallback" | "failed" | undefined>()
 
-    const refresh = useCallback(async () => {
+    const refresh = useCallback(async (): Promise<CredentialState | undefined> => {
       try {
         const configurationResponse = await api.call("configuration")
         if (!configurationResponse.ok || !isConnectorConfiguration(configurationResponse.value)) {
@@ -208,17 +211,20 @@ export function apply(ctx: ClientContext): void {
         ])
         if (!credentialResponse.ok) throw new Error(credentialResponse.error.message)
         const view = credentialResponse.value[nextConfiguration.apiKeyEnv]
-        setConfiguration(nextConfiguration)
-        setCredential({
+        const nextCredential: CredentialState = {
           configured: view?.configured ?? false,
           writable: view?.writable ?? true,
           ...(view?.source ? { source: view.source } : {}),
-        })
+        }
+        setConfiguration(nextConfiguration)
+        setCredential(nextCredential)
         if (connectorResponse.ok && isConnectorStatus(connectorResponse.value)) {
           setConnector(connectorResponse.value)
         }
+        return nextCredential
       } catch {
         setMessage("failed")
+        return undefined
       }
     }, [])
 
@@ -280,8 +286,9 @@ export function apply(ctx: ClientContext): void {
         if (!response.ok) throw new Error(response.error.message)
         setDraft("")
         setEditingKey(false)
-        setMessage("removed")
-        await refresh()
+        // Unset removes only the stored layer; an ambient fallback may still supply the key.
+        const next = await refresh()
+        if (next) setMessage(next.configured ? "removedFallback" : "removed")
         connections.invalidateAccountData()
       } catch {
         setMessage("failed")

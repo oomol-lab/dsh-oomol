@@ -27,7 +27,7 @@ API keys are sent as Bearer credentials after endpoint validation. OOMOL Hosted 
 
 ## Client configuration
 
-The Host registers one exact `POST /api/oomol/<operation>` route per operation through `connection.fetch.register`. Harness admits these requests only from trusted Host/Origin values that carry the browser-session cookie minted from the launch URL. Do not switch back to `connection.rpc.handle`: in Harness 0.2.0-rc.2 it resolves `webServer` through the Connection plugin's own context, which does not inject it, so registration fails for third-party callers. The `configuration` route exposes a safe view:
+The Host registers one exact `POST /api/oomol/<operation>` route per operation through `connection.fetch.register`. Harness admits these requests only from trusted Host/Origin values that carry the browser-session cookie minted from the launch URL. Do not switch back to `connection.rpc.handle`: since Harness 0.2.0-rc.2 (still true in 0.2.1-rc.3) it resolves `webServer` through the Connection plugin's own context, which does not inject it, so registration fails for third-party callers. The `configuration` route exposes a safe view:
 
 ```ts
 interface ConnectorConfiguration {
