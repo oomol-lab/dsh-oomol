@@ -36,6 +36,7 @@ describe("OOMOL Connections RPC", () => {
             iconUrl: "javascript:alert(1)",
             authTypes: ["oauth2"],
             categories: [{ id: "developer", displayName: "Developer" }],
+            searchAliases: [" 代码托管 ", "代码托管", "", 42, "x".repeat(201)],
             secret: "must-not-cross-rpc",
           }],
         })
@@ -70,6 +71,7 @@ describe("OOMOL Connections RPC", () => {
           iconUrl: null,
           authTypes: ["oauth2"],
           categories: [{ id: "developer", displayName: "Developer" }],
+          searchAliases: ["代码托管"],
         }],
         apps: [{
           id: "app_123",
@@ -93,6 +95,46 @@ describe("OOMOL Connections RPC", () => {
     expect(JSON.stringify(response)).not.toContain("provider-secret")
     expect(JSON.stringify(response)).not.toContain("must-not-cross-rpc")
     expect(JSON.stringify(response)).not.toContain("api-secret")
+  })
+
+  it("requests localized Providers and keeps English names searchable", async () => {
+    const requested: string[] = []
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      requested.push(`${url.pathname}${url.search}`)
+      if (url.pathname === "/v1/apps") return json({ success: true, data: [] })
+      if (url.pathname === "/v1/providers/amap") {
+        return json({ success: true, data: { service: "amap", displayName: "高德地图", authTypes: ["api_key"] } })
+      }
+      const zh = url.searchParams.get("locale") === "zh-CN"
+      return json({
+        success: true,
+        data: [
+          { service: "amap", displayName: zh ? "高德地图" : "AMap", searchAliases: ["高德"], authTypes: ["api_key"] },
+          { service: "github", displayName: "GitHub", authTypes: ["oauth2"] },
+        ],
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    const handler = createConnectionsRpcHandler({ resolveConnection: async () => connection })
+
+    const zhList = await handler("connections/list", { locale: "zh-CN" }, signal)
+    const zhProviders = (zhList as { value: { providers: unknown[] } }).value.providers
+    expect(zhProviders).toEqual([
+      expect.objectContaining({ service: "amap", displayName: "高德地图", searchAliases: ["高德", "AMap"] }),
+      expect.objectContaining({ service: "github", displayName: "GitHub", searchAliases: [] }),
+    ])
+    await handler("connections/list", { locale: "fr" }, signal)
+    await handler("connections/provider", { service: "amap", locale: "zh-CN" }, signal)
+
+    expect(requested).toEqual([
+      "/v1/providers?locale=zh-CN",
+      "/v1/providers?locale=en",
+      "/v1/apps",
+      "/v1/providers?locale=en",
+      "/v1/apps",
+      "/v1/providers/amap?locale=zh-CN",
+    ])
   })
 
   it("sends Provider credentials directly from the loopback RPC to Connector", async () => {

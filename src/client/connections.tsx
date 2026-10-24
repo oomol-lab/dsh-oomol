@@ -14,6 +14,8 @@ import {
 } from "react"
 import { TimedMemoryCache } from "./connections-cache.js"
 import { ConnectionsListRequests } from "./connections-controller.js"
+import { connectorLocaleOf, type ConnectionsLocaleSource, type ConnectorLocale } from "./connections-locale.js"
+import { filterProvidersByQuery } from "./connections-search.js"
 import {
   deriveProviderConnectionState,
   hasAmbiguousDefault,
@@ -266,6 +268,7 @@ interface ProviderListItem {
   displayName: string
   iconUrl: string | null
   categories: Array<{ id: string; displayName: string }>
+  searchAliases: string[]
   authTypes: AuthType[]
 }
 
@@ -336,8 +339,9 @@ const OPEN_CONNECTOR_FALLBACK: RepositoryStatus = {
 }
 
 export class ConnectionsController {
-  #listCache = new TimedMemoryCache<"list", ConnectionsList>(CONNECTIONS_CACHE_FRESH_MS)
-  #providerCache = new TimedMemoryCache<string, ProviderDetail>(CONNECTIONS_CACHE_FRESH_MS)
+  // Provider names and setup copy are localized, so both caches are keyed by Connector locale.
+  #listCache = new TimedMemoryCache<ConnectorLocale, ConnectionsList>(CONNECTIONS_CACHE_FRESH_MS)
+  #providerCache = new TimedMemoryCache<`${ConnectorLocale}:${string}`, ProviderDetail>(CONNECTIONS_CACHE_FRESH_MS)
   #repositoryCache = new TimedMemoryCache<"open-connector", RepositoryStatus>(REPOSITORY_CACHE_FRESH_MS)
   #listRequests = new ConnectionsListRequests()
 
@@ -345,21 +349,21 @@ export class ConnectionsController {
   getListRequest = this.#listRequests.getSnapshot
   requestList = this.#listRequests.request
 
-  getListCache = () => this.#listCache.get("list")
+  getListCache = (locale: ConnectorLocale) => this.#listCache.get(locale)
 
-  setListCache = (value: ConnectionsList) => {
-    this.#listCache.set("list", value)
+  setListCache = (locale: ConnectorLocale, value: ConnectionsList) => {
+    this.#listCache.set(locale, value)
   }
 
-  isListCacheFresh = () => this.#listCache.isFresh("list")
+  isListCacheFresh = (locale: ConnectorLocale) => this.#listCache.isFresh(locale)
 
-  getProviderCache = (service: string) => this.#providerCache.get(service)
+  getProviderCache = (locale: ConnectorLocale, service: string) => this.#providerCache.get(`${locale}:${service}`)
 
-  setProviderCache = (service: string, value: ProviderDetail) => {
-    this.#providerCache.set(service, value)
+  setProviderCache = (locale: ConnectorLocale, service: string, value: ProviderDetail) => {
+    this.#providerCache.set(`${locale}:${service}`, value)
   }
 
-  isProviderCacheFresh = (service: string) => this.#providerCache.isFresh(service)
+  isProviderCacheFresh = (locale: ConnectorLocale, service: string) => this.#providerCache.isFresh(`${locale}:${service}`)
 
   getRepositoryCache = () => this.#repositoryCache.get("open-connector")
 
@@ -387,6 +391,7 @@ interface ConnectorConfiguration {
 export function createConnectionsComponents(
   api: OomolApi,
   controller: ConnectionsController,
+  locale: ConnectionsLocaleSource,
   openPanel: () => void,
 ) {
   function ConnectionsHeaderButton({ t }: HeaderProps) {
@@ -432,6 +437,7 @@ export function createConnectionsComponents(
       <ConnectionsPanel
         api={api}
         controller={controller}
+        localeSource={locale}
         t={t}
         onClose={() => { tab.actions.close() }}
       />
@@ -452,15 +458,18 @@ function isConnectorConfiguration(value: unknown): value is ConnectorConfigurati
 function ConnectionsPanel({
   api,
   controller,
+  localeSource,
   t,
   onClose,
 }: {
   api: OomolApi
   controller: ConnectionsController
+  localeSource: ConnectionsLocaleSource
   t: (key: ConnectionsLocaleKey, params?: Record<string, unknown>) => string
   onClose: () => void
 }) {
-  const initialListCache = controller.getListCache()
+  const locale = connectorLocaleOf(useSyncExternalStore(localeSource.subscribe, localeSource.getActive))
+  const initialListCache = controller.getListCache(locale)
   const initialRepositoryCache = controller.getRepositoryCache()
   const [data, setData] = useState<ConnectionsList | null>(() => initialListCache?.value ?? null)
   const [repository, setRepository] = useState<RepositoryStatus>(() => initialRepositoryCache?.value ?? OPEN_CONNECTOR_FALLBACK)
@@ -473,6 +482,7 @@ function ConnectionsPanel({
   const listRequest = useSyncExternalStore(controller.subscribeList, controller.getListRequest)
   const alive = useRef(true)
   const hasListData = useRef(initialListCache !== undefined)
+  const listLocale = useRef(locale)
 
   useEffect(() => () => { alive.current = false }, [])
 
@@ -488,10 +498,11 @@ function ConnectionsPanel({
     if (!quiet) setLoading(true)
     setError(null)
     try {
-      const next = await call<ConnectionsList>("connections/list", {})
-      controller.setListCache(next)
+      const next = await call<ConnectionsList>("connections/list", { locale })
+      controller.setListCache(locale, next)
       hasListData.current = true
-      if (alive.current) setData(next)
+      // A response for a locale the user already switched away from only feeds its cache.
+      if (alive.current && listLocale.current === locale) setData(next)
       return next
     } catch (caught) {
       if (alive.current && (!quiet || !hasListData.current)) {
@@ -501,26 +512,33 @@ function ConnectionsPanel({
     } finally {
       if (alive.current && !quiet) setLoading(false)
     }
-  }, [call, controller])
+  }, [call, controller, locale])
 
   useEffect(() => {
     if (!listRequest.activated) return
-    const cached = controller.getListCache()
-    if (cached && controller.isListCacheFresh()) {
+    const localeChanged = listLocale.current !== locale
+    listLocale.current = locale
+    const cached = controller.getListCache(locale)
+    if (cached && controller.isListCacheFresh(locale)) {
       hasListData.current = true
       setData(cached.value)
       setError(null)
       setLoading(false)
       return
     }
-    if (!cached) {
+    // Switching locale keeps the current list on screen until the localized one arrives.
+    const keepCurrent = localeChanged && hasListData.current
+    if (cached) {
+      hasListData.current = true
+      setData(cached.value)
+    } else if (!keepCurrent) {
       hasListData.current = false
       setData(null)
       setSelectedService(null)
       setProvider(null)
     }
-    void refresh(cached !== undefined).catch(() => undefined)
-  }, [controller, listRequest, refresh])
+    void refresh(cached !== undefined || keepCurrent).catch(() => undefined)
+  }, [controller, listRequest, locale, refresh])
 
   useEffect(() => {
     if (!listRequest.activated) return
@@ -538,18 +556,18 @@ function ConnectionsPanel({
       setProvider(null)
       return
     }
-    const cached = controller.getProviderCache(selectedService)
+    const cached = controller.getProviderCache(locale, selectedService)
     setProvider(cached?.value ?? null)
-    if (cached && controller.isProviderCacheFresh(selectedService)) {
+    if (cached && controller.isProviderCacheFresh(locale, selectedService)) {
       setDetailLoading(false)
       return
     }
     let active = true
     setDetailLoading(cached === undefined)
     setError(null)
-    void call<ProviderDetail>("connections/provider", { service: selectedService })
+    void call<ProviderDetail>("connections/provider", { service: selectedService, locale })
       .then((next) => {
-        controller.setProviderCache(selectedService, next)
+        controller.setProviderCache(locale, selectedService, next)
         if (active) setProvider(next)
       })
       .catch((caught) => {
@@ -557,7 +575,7 @@ function ConnectionsPanel({
       })
       .finally(() => { if (active) setDetailLoading(false) })
     return () => { active = false }
-  }, [call, controller, selectedService])
+  }, [call, controller, locale, selectedService])
 
   const appsByService = useMemo(() => {
     const grouped = new Map<string, ConnectedApp[]>()
@@ -571,18 +589,12 @@ function ConnectionsPanel({
   }, [data])
 
   const visibleProviders = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
     const providers = [...(data?.providers ?? [])]
     providers.sort((left, right) => {
       const connected = Number(appsByService.has(right.service)) - Number(appsByService.has(left.service))
       return connected || left.displayName.localeCompare(right.displayName)
     })
-    if (!normalized) return providers
-    return providers.filter((item) =>
-      `${item.displayName} ${item.service} ${item.categories.map((category) => category.displayName).join(" ")}`
-        .toLowerCase()
-        .includes(normalized),
-    )
+    return filterProvidersByQuery(providers, query)
   }, [appsByService, data, query])
   const providerCount = data ? data.providers.length.toLocaleString("en-US") : "1,300+"
   const subtitle = t("subtitle", { count: providerCount })
@@ -647,7 +659,7 @@ function ConnectionsPanel({
                     : styles.statusIdle
                 return (
                   <button key={item.service} type="button" style={styles.providerRow} onClick={() => {
-                    setProvider(controller.getProviderCache(item.service)?.value ?? null)
+                    setProvider(controller.getProviderCache(locale, item.service)?.value ?? null)
                     setSelectedService(item.service)
                   }}>
                     <ProviderIcon provider={item} />

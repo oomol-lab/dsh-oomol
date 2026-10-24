@@ -1,6 +1,8 @@
 import type { ResolvedOomolConnection } from "./runtime.js"
 
 const AUTH_TYPES = ["oauth2", "api_key", "custom_credential", "federated", "no_auth"] as const
+// Connector localizes Provider metadata for these locales and falls back to English otherwise.
+const CONNECTOR_LOCALES = ["en", "zh-CN"] as const
 const IDENTIFIER = /^[A-Za-z0-9_-]{1,160}$/
 // Connector exposes virtual no-auth and Marketplace apps in GET /v1/apps. They have no stored app row,
 // so by-id routes (disconnect, reconnect) reject them; only Marketplace ids can become the default.
@@ -9,11 +11,14 @@ const MARKETPLACE_APP_ID = /^marketplace:[A-Za-z0-9_-]{1,160}:[A-Za-z0-9_-]{1,16
 // OAuth authorization option ids default to native scopes (for example `read:user` or scope URLs).
 const AUTHORIZATION_OPTION_ID = /^[\x21-\x7E]{1,500}$/
 const MAX_AUTHORIZATION_OPTIONS = 64
+const MAX_SEARCH_ALIASES = 64
 const AUTHORIZATION_RISKS = ["standard", "sensitive", "destructive"] as const
 const OAUTH_RETURN_URI = "https://console.oomol.com/app-connections/callback"
 const MAX_CREDENTIAL_BYTES = 512 * 1024
 
 type AuthType = (typeof AUTH_TYPES)[number]
+type ConnectorLocale = (typeof CONNECTOR_LOCALES)[number]
+type ProviderListItem = NonNullable<ReturnType<typeof sanitizeProviderListItem>>
 type JsonRecord = Record<string, unknown>
 
 export interface ConnectionsRpcContext {
@@ -30,14 +35,18 @@ export function createConnectionsRpcHandler(context: ConnectionsRpcContext) {
       }
 
       if (endpoint === "connections/list") {
-        const [providers, apps] = await Promise.all([
-          requestConnector(connection, "/v1/providers", { signal }),
+        const locale = readConnectorLocale(payload)
+        const [providers, englishProviders, apps] = await Promise.all([
+          requestConnector(connection, `/v1/providers?${new URLSearchParams({ locale })}`, { signal }),
+          // Localized lists replace English names, so fetch them too and keep English queries matching.
+          locale === "en" ? undefined : requestConnector(connection, "/v1/providers?locale=en", { signal }),
           requestConnector(connection, "/v1/apps", { signal }),
         ])
+        const localized = arrayData(providers).map(sanitizeProviderListItem).filter(isPresent)
         return {
           ok: true as const,
           value: {
-            providers: arrayData(providers).map(sanitizeProviderListItem).filter(isPresent),
+            providers: englishProviders === undefined ? localized : withEnglishAliases(localized, arrayData(englishProviders)),
             apps: arrayData(apps).map(sanitizeApp).filter(isPresent),
           },
         }
@@ -45,7 +54,12 @@ export function createConnectionsRpcHandler(context: ConnectionsRpcContext) {
 
       if (endpoint === "connections/provider") {
         const service = readIdentifier(payload, "service")
-        const provider = await requestConnector(connection, `/v1/providers/${encodeURIComponent(service)}`, { signal })
+        const locale = readConnectorLocale(payload)
+        const provider = await requestConnector(
+          connection,
+          `/v1/providers/${encodeURIComponent(service)}?${new URLSearchParams({ locale })}`,
+          { signal },
+        )
         const value = sanitizeProviderDetail(dataOf(provider))
         if (!value) throw new ConnectionsRequestError("invalid_response", "OOMOL returned an invalid Provider.")
         return { ok: true as const, value }
@@ -262,8 +276,28 @@ function sanitizeProviderListItem(value: unknown) {
           return { id, displayName: optionalPlainString(item?.displayName, 200) ?? id }
         }).filter(isPresent)
       : [],
+    // Connector ships localized aliases (for example 高德 for amap) so non-English queries can match.
+    searchAliases: sanitizeSearchAliases(source.searchAliases),
     authTypes,
   }
+}
+
+function withEnglishAliases(providers: ProviderListItem[], englishProviders: unknown[]): ProviderListItem[] {
+  const englishNames = new Map<string, string>()
+  for (const item of englishProviders) {
+    const english = sanitizeProviderListItem(item)
+    if (english) englishNames.set(english.service, english.displayName)
+  }
+  return providers.map((provider) => {
+    const englishName = englishNames.get(provider.service)
+    if (!englishName || englishName === provider.displayName || provider.searchAliases.includes(englishName)) return provider
+    return { ...provider, searchAliases: [...provider.searchAliases, englishName] }
+  })
+}
+
+function sanitizeSearchAliases(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.slice(0, MAX_SEARCH_ALIASES).map((alias) => optionalPlainString(alias, 200)).filter(isPresent))]
 }
 
 function sanitizeProviderDetail(value: unknown) {
@@ -377,6 +411,11 @@ function arrayData(value: unknown): unknown[] {
 
 function readIdentifier(payload: unknown, key: string): string {
   return identifierValue(requiredRecord(payload)[key], key)
+}
+
+function readConnectorLocale(payload: unknown): ConnectorLocale {
+  const value = recordOf(payload)?.locale
+  return CONNECTOR_LOCALES.find((locale) => locale === value) ?? "en"
 }
 
 function readDefaultAppId(payload: unknown, service: string): string {
