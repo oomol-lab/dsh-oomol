@@ -15,6 +15,7 @@ import {
   CONNECTIONS_TAB_ID,
   CONNECTIONS_TAB_KIND,
 } from "./connections.js"
+import type { ConnectionsLocaleSource } from "./connections-locale.js"
 import { createOomolApi } from "./oomol-api.js"
 
 const NS = "oomol.settings"
@@ -182,6 +183,10 @@ export function apply(ctx: ClientContext): void {
   const api = createOomolApi()
   const credentials = ctx.remote.credentials
   const connections = new ConnectionsController()
+  const connectionsLocale: ConnectionsLocaleSource = {
+    subscribe: (onChange) => ctx.locale.subscribe(onChange),
+    getActive: () => ctx.locale.getSnapshot().active,
+  }
   ctx.effect(() => ctx.locale.register(NS, { en, zh }), "oomol: settings dictionaries")
   ctx.effect(
     () => ctx.locale.register(CONNECTIONS_NS, { en: connectionsEn, zh: connectionsZh }),
@@ -419,7 +424,7 @@ export function apply(ctx: ClientContext): void {
       title: () => tConnections("title"),
       guide: [{ id: "connections", order: 60, title: () => tConnections("title"), description: () => tConnections("narrowViewportHint") }],
     }), "oomol: connections tab type")
-    const { ConnectionsHeaderButton, ConnectionsDetails } = createConnectionsComponents(api, connections, () => {
+    const { ConnectionsHeaderButton, ConnectionsDetails } = createConnectionsComponents(api, connections, connectionsLocale, () => {
       ctx.sidebarRight.openTab(CONNECTIONS_TAB_KIND)
     })
     ctx.slots.inject("conversation.session.header.utilities", () => ctx.slots.register({
